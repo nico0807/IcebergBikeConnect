@@ -1,0 +1,7 @@
+.idea/
+original/
+res/
+smali/
+unknown/
+AndroidManifest.xml
+apktool.yml
