@@ -42,8 +42,10 @@ class Dashboard:
         try:
             self.stdscr.addch(y, x, curses.ACS_ULCORNER, curses.color_pair(6))
             for i in range(1, width - 1):
-                self.stdscr.addch(y, x + i, curses.ACS_HLINE, curses.color_pair(6))
-            self.stdscr.addch(y, x + width - 1, curses.ACS_URCORNER, curses.color_pair(6))
+                self.stdscr.addch(y, x + i, curses.ACS_HLINE,
+                                  curses.color_pair(6))
+            self.stdscr.addch(y, x + width - 1,
+                              curses.ACS_URCORNER, curses.color_pair(6))
         except:
             pass
 
@@ -57,37 +59,46 @@ class Dashboard:
 
         for row in range(1, height - 1):
             try:
-                self.stdscr.addch(y + row, x, curses.ACS_VLINE, curses.color_pair(6))
-                self.stdscr.addch(y + row, x + width - 1, curses.ACS_VLINE, curses.color_pair(6))
+                self.stdscr.addch(y + row, x, curses.ACS_VLINE,
+                                  curses.color_pair(6))
+                self.stdscr.addch(y + row, x + width - 1,
+                                  curses.ACS_VLINE, curses.color_pair(6))
             except:
                 pass
 
         # Bottom border
         try:
-            self.stdscr.addch(y + height - 1, x, curses.ACS_LLCORNER, curses.color_pair(6))
+            self.stdscr.addch(y + height - 1, x,
+                              curses.ACS_LLCORNER, curses.color_pair(6))
             for i in range(1, width - 1):
-                self.stdscr.addch(y + height - 1, x + i, curses.ACS_HLINE, curses.color_pair(6))
-            self.stdscr.addch(y + height - 1, x + width - 1, curses.ACS_LRCORNER, curses.color_pair(6))
+                self.stdscr.addch(y + height - 1, x + i,
+                                  curses.ACS_HLINE, curses.color_pair(6))
+            self.stdscr.addch(y + height - 1, x + width - 1,
+                              curses.ACS_LRCORNER, curses.color_pair(6))
         except:
             pass
 
     def draw_gauge(self, y, x, width, value, max_value, label="", color=2):
         """Draw a horizontal gauge/bar"""
         bar_width = width - 10
-        fill = min(int((value / max_value) * bar_width) if max_value > 0 else 0, bar_width)
+        fill = min(int((value / max_value) * bar_width)
+                   if max_value > 0 else 0, bar_width)
 
         # Label
         self.stdscr.addstr(y, x, f"{label}", curses.color_pair(6))
-        self.stdscr.addstr(y, x + 8, f"{value:6.1f}/{max_value}", curses.color_pair(2))
+        self.stdscr.addstr(
+            y, x + 8, f"{value:6.1f}/{max_value}", curses.color_pair(2))
 
         # Bar
         bar_y = y + 1
         for i in range(bar_width):
             if i < fill:
                 try:
-                    self.stdscr.addch(bar_y, x + 8 + i, curses.ACS_CKBOARD, curses.color_pair(color))
+                    self.stdscr.addch(
+                        bar_y, x + 8 + i, curses.ACS_CKBOARD, curses.color_pair(color))
                 except:
-                    self.stdscr.addstr(bar_y, x + 8 + i, " ", curses.color_pair(color))
+                    self.stdscr.addstr(bar_y, x + 8 + i, " ",
+                                       curses.color_pair(color))
             else:
                 self.stdscr.addstr(bar_y, x + 8 + i, " ", curses.color_pair(6))
 
@@ -100,7 +111,8 @@ class Dashboard:
 
         # Label
         try:
-            self.stdscr.addstr(y + size, x + size // 2 - len(label) // 2, label, curses.color_pair(2))
+            self.stdscr.addstr(y + size, x + size // 2 -
+                               len(label) // 2, label, curses.color_pair(2))
         except:
             pass
 
@@ -113,7 +125,8 @@ class Dashboard:
             cy, cx = center_y - py, center_x + px
             if 0 <= cy < self.stdscr.getmaxyx()[0] and 0 <= cx < self.stdscr.getmaxyx()[1]:
                 try:
-                    self.stdscr.addch(cy, cx, curses.ACS_PLUS, curses.color_pair(6))
+                    self.stdscr.addch(cy, cx, curses.ACS_PLUS,
+                                      curses.color_pair(6))
                 except:
                     pass
 
@@ -128,7 +141,8 @@ class Dashboard:
             cy, cx = center_y - int(ny * t), center_x + int(nx * t)
             if 0 <= cy < self.stdscr.getmaxyx()[0] and 0 <= cx < self.stdscr.getmaxyx()[1]:
                 try:
-                    self.stdscr.addch(cy, cx, curses.ACS_DIAMOND, curses.color_pair(3))
+                    self.stdscr.addch(
+                        cy, cx, curses.ACS_DIAMOND, curses.color_pair(3))
                 except:
                     pass
 
@@ -136,7 +150,7 @@ class Dashboard:
         val_str = f"{int(value)}"
         try:
             self.stdscr.addstr(center_y + radius // 2, center_x - len(val_str) // 2,
-                           val_str, curses.color_pair(3))
+                               val_str, curses.color_pair(3))
         except:
             pass
 
@@ -156,7 +170,8 @@ class Dashboard:
         # Header
         header = f" iSuper Bike Dashboard - AP Mode "
         try:
-            self.stdscr.addstr(0, (width - len(header)) // 2, header, curses.color_pair(1) | curses.A_BOLD)
+            self.stdscr.addstr(0, (width - len(header)) // 2,
+                               header, curses.color_pair(1) | curses.A_BOLD)
         except:
             pass
 
@@ -188,19 +203,19 @@ class Dashboard:
         info_y = 4
         try:
             self.stdscr.addstr(info_y, 2, f"IP: {self.bike.ip} | Port: {self.bike.PORT}",
-                           curses.color_pair(6))
+                               curses.color_pair(6))
             info_y += 1
             self.stdscr.addstr(info_y, 2,
-                           f"MAC: {status['mac_address'] or 'N/A'} | "
-                           f"Wheel: {status['wheel_diameter']:.2f}\" | "
-                           f"Range: {status['resistance_min']}-{status['resistance_max']}",
-                           curses.color_pair(6))
+                               f"MAC: {status['mac_address'] or 'N/A'} | "
+                               f"Wheel: {status['wheel_diameter']:.2f}\" | "
+                               f"Range: {status['resistance_min']}-{status['resistance_max']}",
+                               curses.color_pair(6))
             info_y += 1
             self.stdscr.addstr(info_y, 2,
-                           f"Sent: {status['messages_sent']} | "
-                           f"Recv: {status['messages_received']} | "
-                           f"Last Update: {status['last_update'].strftime('%H:%M:%S') if status['last_update'] else 'Never'}",
-                           curses.color_pair(6))
+                               f"Sent: {status['messages_sent']} | "
+                               f"Recv: {status['messages_received']} | "
+                               f"Last Update: {status['last_update'].strftime('%H:%M:%S') if status['last_update'] else 'Never'}",
+                               curses.color_pair(6))
         except:
             pass
 
@@ -214,7 +229,7 @@ class Dashboard:
         speed_x = 2 + col_width // 2 - 4
         try:
             self.stdscr.addstr(speed_y, speed_x, f"{status['speed']:6.1f}",
-                           curses.color_pair(3) | curses.A_BOLD)
+                               curses.color_pair(3) | curses.A_BOLD)
         except:
             pass
 
@@ -224,23 +239,28 @@ class Dashboard:
         rpm_x = 2 + col_width + col_width // 2 - 4
         try:
             color = 2
-            if status['rpm'] > 100: color = 3
-            if status['rpm'] > 120: color = 4
+            if status['rpm'] > 100:
+                color = 3
+            if status['rpm'] > 120:
+                color = 4
             self.stdscr.addstr(rpm_y, rpm_x, f"{status['rpm']:6d}",
-                           curses.color_pair(color) | curses.A_BOLD)
+                               curses.color_pair(color) | curses.A_BOLD)
         except:
             pass
 
         # Heart rate box
-        self.draw_box(data_y, 2 + col_width * 2, 6, col_width, "HEART RATE (bpm)")
+        self.draw_box(data_y, 2 + col_width * 2, 6,
+                      col_width, "HEART RATE (bpm)")
         hr_y = data_y + 2
         hr_x = 2 + col_width * 2 + col_width // 2 - 4
         try:
             color = 2
-            if status['heart_rate'] > 120: color = 3
-            if status['heart_rate'] > 150: color = 4
+            if status['heart_rate'] > 120:
+                color = 3
+            if status['heart_rate'] > 150:
+                color = 4
             self.stdscr.addstr(hr_y, hr_x, f"{status['heart_rate']:6d}",
-                           curses.color_pair(color) | curses.A_BOLD)
+                               curses.color_pair(color) | curses.A_BOLD)
         except:
             pass
 
@@ -250,7 +270,7 @@ class Dashboard:
         level_x = 2 + col_width * 3 + col_width // 2 - 4
         try:
             self.stdscr.addstr(level_y, level_x, f"{status['level']:6d}",
-                           curses.color_pair(5) | curses.A_BOLD)
+                               curses.color_pair(5) | curses.A_BOLD)
         except:
             pass
 
@@ -263,30 +283,34 @@ class Dashboard:
         dist_x = 2 + col_width // 2 - 5
         try:
             self.stdscr.addstr(dist_y, dist_x, f"{status['distance']:8.3f}",
-                           curses.color_pair(1) | curses.A_BOLD)
+                               curses.color_pair(1) | curses.A_BOLD)
         except:
             pass
 
         # Calories
-        self.draw_box(dist_cal_y, 2 + col_width, 4, col_width, "CALORIES (kcal)")
+        self.draw_box(dist_cal_y, 2 + col_width, 4,
+                      col_width, "CALORIES (kcal)")
         cal_y = dist_cal_y + 2
         cal_x = 2 + col_width + col_width // 2 - 5
         try:
             self.stdscr.addstr(cal_y, cal_x, f"{status['calories']:8.1f}",
-                           curses.color_pair(5) | curses.A_BOLD)
+                               curses.color_pair(5) | curses.A_BOLD)
         except:
             pass
 
         # Watts
-        self.draw_box(dist_cal_y, 2 + col_width * 2, 4, col_width, "POWER (Watts)")
+        self.draw_box(dist_cal_y, 2 + col_width * 2,
+                      4, col_width, "POWER (Watts)")
         watt_y = dist_cal_y + 2
         watt_x = 2 + col_width * 2 + col_width // 2 - 4
         try:
             color = 2
-            if status['watts'] > 150: color = 3
-            if status['watts'] > 200: color = 4
+            if status['watts'] > 150:
+                color = 3
+            if status['watts'] > 200:
+                color = 4
             self.stdscr.addstr(watt_y, watt_x, f"{status['watts']:6d}",
-                           curses.color_pair(color) | curses.A_BOLD)
+                               curses.color_pair(color) | curses.A_BOLD)
         except:
             pass
 
@@ -294,7 +318,7 @@ class Dashboard:
         help_y = dist_cal_y + 5
         try:
             help_text = (" Controls: [↑/↓] Level | [Space] Pause/Resume | [C] Clear Data | "
-                        "[A] Toggle Auto | [Q] Quit | [R] Reconnect ")
+                         "[A] Toggle Auto | [Q] Quit | [R] Reconnect ")
             self.stdscr.addstr(help_y, 2, help_text, curses.color_pair(6))
         except:
             pass
@@ -307,9 +331,9 @@ class Dashboard:
 
         try:
             self.stdscr.addstr(height // 2 - 2, width // 2 - 20,
-                           "No bike connected", curses.color_pair(4) | curses.A_BOLD)
+                               "No bike connected", curses.color_pair(4) | curses.A_BOLD)
             self.stdscr.addstr(height // 2, width // 2 - 25,
-                           "Press [C] to connect, [Q] to quit", curses.color_pair(6))
+                               "Press [C] to connect, [Q] to quit", curses.color_pair(6))
         except:
             pass
 
@@ -376,10 +400,12 @@ class Dashboard:
                 self.bike.clear_data()
             elif key == curses.KEY_UP:
                 if self.bike:
-                    self.bike.set_level(self.bike.level + 1)
+                    self.bike.set_level(
+                        self.bike.level + 1, self.bike.resistance_min, self.bike.resistance_max)
             elif key == curses.KEY_DOWN:
                 if self.bike:
-                    self.bike.set_level(self.bike.level - 1)
+                    self.bike.set_level(
+                        self.bike.level - 1, self.bike.resistance_min, self.bike.resistance_max)
 
             # Auto-update data
             if self.auto_update and self.bike and self.bike.connected:
@@ -399,13 +425,14 @@ def main():
     """Main entry point"""
     import argparse
 
-    parser = argparse.ArgumentParser(description='iSuper Bike Dashboard - AP Mode')
+    parser = argparse.ArgumentParser(
+        description='iSuper Bike Dashboard - AP Mode')
     parser.add_argument('--ip', default='169.254.1.1',
-                       help='Bike IP address (default: 192.168.1.54)')
+                        help='Bike IP address (default: 192.168.1.54)')
     parser.add_argument('--debug', action='store_true',
-                       help='Enable debug logging')
+                        help='Enable debug logging')
     parser.add_argument('--list-ips', action='store_true',
-                       help='Scan for available bikes on local network')
+                        help='Scan for available bikes on local network')
 
     args = parser.parse_args()
 
@@ -425,7 +452,8 @@ def main():
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.settimeout(1.0)
-                result = s.connect_ex((ip, 1971))  # Fixed port from 1963 to 1971
+                # Fixed port from 1963 to 1971
+                result = s.connect_ex((ip, 1971))
                 s.close()
                 if result == 0:
                     print(f"FOUND! ✓")
@@ -437,7 +465,8 @@ def main():
 
     # Run dashboard
     try:
-        curses.wrapper(lambda stdscr: Dashboard(stdscr).run(args.ip, args.debug))
+        curses.wrapper(lambda stdscr: Dashboard(
+            stdscr).run(args.ip, args.debug))
     except KeyboardInterrupt:
         print("\nDashboard stopped by user")
     except Exception as e:

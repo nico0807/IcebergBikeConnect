@@ -57,7 +57,7 @@ The original App operates in four main states which won't be used by this implem
 
 | Command | Direction | Description | Response |
 |---------|-----------|-------------|----------|
-| `<EQ_>` | App → Bike | Start initialization | `<EQ>` |
+| `<EQ_>` | App → Bike | Start initialization | `<EQ_OK>` |
 | `<EP_[PASSWORD]>` | Bike → App | Send password for auth (0)  | `<EP_OK>` |
 | `<ET_[Type]>` | Bike → App | Type of equipment (ET_Upright for my bike) () | `<ET_OK>` |
 | `<EM_>` | Bike → App | Memory data (2)| `<EM_OK>` |

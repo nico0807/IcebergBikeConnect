@@ -76,7 +76,8 @@ class ISuperBike:
                 bytes_val = bytes.fromhex(data)
                 diameter_times_100 = struct.unpack('<f', bytes_val)[0]
                 self.wheel_diameter = diameter_times_100
-                self.log(f"✓ Diameter (8-byte hex): {self.wheel_diameter:.2f}\"")
+                self.log(
+                    f"✓ Diameter (8-byte hex): {self.wheel_diameter:.2f}\"")
                 return True
 
             # Format 2: 16 bytes as little-endian float (first 8 bytes)
@@ -84,7 +85,8 @@ class ISuperBike:
                 bytes_val = bytes.fromhex(data[:8])
                 diameter_times_100 = struct.unpack('<f', bytes_val)[0]
                 self.wheel_diameter = diameter_times_100
-                self.log(f"✓ Diameter (16-byte hex): {self.wheel_diameter:.2f}\"")
+                self.log(
+                    f"✓ Diameter (16-byte hex): {self.wheel_diameter:.2f}\"")
                 return True
 
             # Format 3: Try as decimal × 100
@@ -102,7 +104,8 @@ class ISuperBike:
                         bytes_val = bytes.fromhex(hex_val)
                         diameter_times_100 = struct.unpack('<f', bytes_val)[0]
                         self.wheel_diameter = diameter_times_100
-                        self.log(f"✓ Diameter (EA_hex): {self.wheel_diameter:.2f}\"")
+                        self.log(
+                            f"✓ Diameter (EA_hex): {self.wheel_diameter:.2f}\"")
                         return True
             self.wheel_diameter = 21
             return True
@@ -159,6 +162,54 @@ class ISuperBike:
                 self.log(f"✓ ET data: {data}")
                 return "et_data"
 
+        elif cmd == "ER" and "-" in data:
+            parts = data.split("-")
+            self.resistance_min = int(parts[0])
+            self.resistance_max = int(parts[1])
+            self.log(
+                f"✓ Resistance: {self.resistance_min}-{self.resistance_max}")
+            return "resistance"
+
+        elif cmd == "ER" and data == "OK":
+            return "resistance_ack"
+
+        # According to protocol: EA sends MAC address (6 bytes hex), ED sends diameter
+        elif cmd == "EA" and data:
+            # EA sends MAC address (6 bytes hex according to protocol)
+            if len(data) >= 12 and all(c in '0123456789abcdefABCDEF' for c in data):
+                # Format as MAC address XX:XX:XX:XX:XX:XX
+                mac_bytes = [data[i:i+2] for i in range(0, 12, 2)]
+                self.mac_address = ":".join(mac_bytes).upper()
+                self.log(f"✓ MAC: {self.mac_address}")
+                return "mac"
+            else:
+                # Fallback to hex parsing if not 12 chars
+                if self.parse_wheel_diameter_hex(data):
+                    return "diameter"
+            return "diameter_ack"
+
+        elif cmd == "EA" and data == "OK":
+            return "ea_ok"
+
+        # ED sends wheel diameter according to protocol (diameter / 100)
+        elif cmd == "ED" and data:
+            try:
+                # Try to parse as decimal (diameter × 100)
+                if data.isdigit():
+                    self.wheel_diameter = int(data) / 100.0
+                    self.log(
+                        f"✓ Diameter (decimal): {self.wheel_diameter:.2f}\"")
+                    return "diameter"
+                else:
+                    self.log(f"✓ ED data: {data}")
+                    return "ed_data"
+            except Exception as e:
+                self.log(f"! ED parse error: {e}")
+                return "ed_error"
+
+        elif cmd == "ED" and data == "OK":
+            return "ed_ok"
+
         elif cmd == "EM" and data:
             try:
                 self.memory_data = int(data) if data.isdigit() else data
@@ -169,32 +220,6 @@ class ISuperBike:
 
         elif cmd == "EM" and data == "OK":
             return "memory_ack"
-
-        elif cmd == "ER" and "-" in data:
-            parts = data.split("-")
-            self.resistance_min = int(parts[0])
-            self.resistance_max = int(parts[1])
-            self.log(f"✓ Resistance: {self.resistance_min}-{self.resistance_max}")
-            return "resistance"
-
-        elif cmd == "ER" and data == "OK":
-            return "resistance_ack"
-
-        elif cmd == "EA" and data:
-            if self.parse_wheel_diameter_hex(data):
-                return "diameter"
-            return "diameter_ack"
-
-        elif cmd == "EA" and data == "OK":
-            return "diameter_ack"
-
-        elif cmd == "ED" and data:
-            self.mac_address = data
-            self.log(f"✓ MAC/IP: {self.mac_address}")
-            return "mac"
-
-        elif cmd == "ED" and data == "OK":
-            return "mac_ack"
 
         elif cmd == "EU" and data:
             self.unit_type = data
@@ -239,60 +264,96 @@ class ISuperBike:
             return "unknown"
 
     def parse_sport_data(self, command):
-        """Parse sport data - Format: W6_SYNC,NERGY,POW,BPM,LEVEL,DIST,RPM,?"""
+        """Parse sport data - Format: <W6_SYNC,DISTANCE,RPM,PULSE,LEVEL,CALORIES,POWER,UNKNOWN>"""
         try:
-            # W6_SYNC,NERGY,POW,BPM,LEVEL,DIST,RPM,?
-            # Example: W6_8,039,000,000,03,000224,000,25
+            # W6_SYNC,DISTANCE,RPM,PULSE,LEVEL,CALORIES,POWER,UNKNOWN
+            # Example: <W6_0,224,000,000,03,000000,000,00>
             parts = command.replace("<", "").replace(">", "").split("_")
-            parts = parts[1].split(",")
-            if len(parts) >= 7:
-                # SYNC (part 1) - sync/counter
-                self.sync = int(parts[0]) if parts[0].isdigit() else 0
 
-                # NERGY (part 2) - energy/calories in some format
+            if len(parts) < 2:
+                self.log(f"! Invalid sport data format: {command}")
+                return False
+
+            data_parts = parts[1].split(",")
+
+            # According to protocol, we need at least 8 fields
+            # SYNC (position 0) - sync/counter
+            if len(data_parts) >= 1:
+                self.sync = int(
+                    data_parts[0]) if data_parts[0].isdigit() else 0
+
+            # DISTANCE (position 1) - distance counter (3 chars, needs wrap-around handling)
+            if len(data_parts) >= 2:
                 try:
-                    self.watts = int(parts[1].ljust(4, '0'))
+                    raw_dist = int(data_parts[1].ljust(3, '0'))
+
+                    # Handle wrap-around: if current distance is less than previous, increment hi_dist_value
+                    if hasattr(self, 'old_distance') and raw_dist < self.old_distance:
+                        self.hi_dist_value += 1
+                        self.log(
+                            f"⚠ Distance wrap-around detected, hi_dist_value = {self.hi_dist_value}")
+
+                    self.old_distance = raw_dist
+                    full_dist = self.hi_dist_value * 1000 + raw_dist
+
+                    # Convert to km/miles using wheel diameter
+                    # conv_distance = (diameter * full_dist * 3.14 * 2.54) / 100000
+                    self.distance = (self.wheel_diameter *
+                                     full_dist * 3.14159 * 2.54) / 100000
+                except Exception as e:
+                    self.log(f"! Distance parse error: {e}")
+
+            # RPM (position 2) - cadence (3 chars)
+            if len(data_parts) >= 3:
+                try:
+                    self.rpm = int(data_parts[2].ljust(3, '0'))
                 except:
                     pass
 
-                # POW (part 3) - power/watts
+            # PULSE (position 3) - heart rate/BPM (3 chars)
+            if len(data_parts) >= 4:
                 try:
-                    self.watts = int(parts[2].ljust(4, '0'))
+                    self.heart_rate = int(data_parts[3].ljust(3, '0'))
                 except:
                     pass
 
-                # BPM (part 4) - heart rate
+            # LEVEL (position 4) - resistance level (2 chars)
+            if len(data_parts) >= 5:
                 try:
-                    self.heart_rate = int(parts[3].ljust(4, '0'))
+                    self.level = int(data_parts[4].ljust(2, '0'))
                 except:
                     pass
 
-                # LEVEL (part 5) - resistance level
+            # CALORIES (position 5) - estimated burned calories (6 chars)
+            if len(data_parts) >= 6:
                 try:
-                    self.level = int(parts[4].ljust(3, '0'))
+                    raw_calories = int(data_parts[5].ljust(6, '0'))
+                    self.calories = raw_calories / 100.0  # f_cal = raw_calories / 100
                 except:
                     pass
 
-                # DIST (part 6) - distance
+            # POWER (position 6) - output power in watts (3 chars)
+            if len(data_parts) >= 7:
                 try:
-                    dist_data = parts[5].ljust(6, '0')
-                    raw_dist = float(dist_data) / 1000.0
-                    self.distance = raw_dist * self.wheel_diameter * 3.14 * 2.54 / 100000
+                    self.watts = int(data_parts[6].ljust(3, '0'))
                 except:
                     pass
 
-                # RPM (part 7) - cadence
-                try:
-                    self.rpm = int(parts[6].ljust(4, '0'))
-                except:
-                    pass
+            # UNKNOWN (position 7) - unknown field (2 chars)
+            # Not used currently
 
-                # Calculate speed from RPM
-                self.speed = self.rpm * 55 * 0.009
+            # Calculate speed from RPM using correct formula: f_speed = rpm * 55 * 0.00478536
+            # The formula in the doc shows: rpm * 55 * 0.00478536
+            # This converts to: rpm * 0.2631948, or approximately rpm * 0.263
+            self.speed = self.rpm * 55 * 0.00478536
 
-                self.log(f"✓ Sport - Dist:{self.distance:.2f}km RPM:{self.rpm} HR:{self.heart_rate} Lvl:{self.level} W:{self.watts}W S:{self.speed:.1f}km/h")
+            self.log(
+                f"✓ Sport - Dist:{self.distance:.3f}km RPM:{self.rpm} HR:{self.heart_rate} Lvl:{self.level} W:{self.watts} S:{self.speed:.1f}km/h Cal:{self.calories:.1f}")
+
+            return True
         except Exception as e:
             self.log(f"! Sport data parse error: {e}")
+            return False
 
     def connect(self):
         """Connect to bike over TCP"""
@@ -366,7 +427,7 @@ class ISuperBike:
         return None
 
     def initialize(self):
-        """Initialize connection with bike"""
+        """Initialize connection with bike following protocol sequence"""
         self.log("=== Starting Initialization ===")
 
         # Send init command
@@ -387,31 +448,37 @@ class ISuperBike:
             for response in responses:
                 result = self.parse_command(response)
 
+                # Protocol sequence:
+                # 1. <EQ> - init acknowledged (handled in parse_command)
+                # 2. <EP_SUPERWIGH> - password
                 if result == "password":
                     self.send("<EP_OK>")
                     time.sleep(0.1)
+                # 3. <ER_1-20> - resistance range (min-max)
                 elif result == "resistance":
                     self.send("<ER_OK>")
                     time.sleep(0.5)
-                elif result == "diameter":
+                # 4. <EA_...> - MAC address (according to protocol)
+                elif result == "mac":
                     self.send("<EA_OK>")
                     time.sleep(0.1)
-                elif result == "mac":
+                # 5. <ED_2100> - wheel diameter ×100 (21.00")
+                elif result == "diameter":
                     self.send("<ED_OK>")
                     time.sleep(0.1)
-                elif result == "unit":
-                    self.send("<EU_OK>")
-                    time.sleep(0.1)
+                # 6. <EM> - memory data
                 elif result == "memory":
                     self.send("<EM_OK>")
                     time.sleep(0.1)
+                # Optional: <ET_Upright> or <EV> - equipment type/vendor
                 elif result in ["et_data", "ev_data"]:
                     self.send("<ET_OK>")
                     time.sleep(0.1)
+                # 7. <Ez> - end of init phase
                 elif result == "init_complete":
                     self.send("<Ez_OK>")
                     time.sleep(0.1)
-                    self.send("<CP_300>")  # Pause
+                    self.send("<CP_300>")  # Pause after init
 
                     init_done = True
                     self.log("Init complete")
@@ -440,16 +507,17 @@ class ISuperBike:
         self.send("<CP_300>")
         self.log("Sport paused")
 
-    def set_level(self, level):
+    def set_level(self, level, min, max):
         """Set resistance level (0-99)"""
+        if level < min:
+            level = min
+        if level > max:
+            level = max
+        level -= 1  # CR_00 => Level 1
         if level < 0:
             level = 0
-        if level > 99:
-            level = 99
         cmd = f"<CR_{level:02d}>"
         self.send(cmd)
-        with self.lock:
-            self.level = level
         self.log(f"Level set to {level}")
 
     def clear_data(self):
