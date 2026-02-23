@@ -19,22 +19,10 @@ This document describes the communication protocol used by the iSuper Fitness ap
 
 ### Connection Modes
 
-| Mode | Value | Description |
-|------|-------|-------------|
-| `CONNECT_SIMULATE` | 0 | Simulation mode (no device) |
-| `CONNECT_WIFI` | 1 | WiFi direct connection |
-| `CONNECT_BT30` | 2 | Bluetooth 3.0 (unused in this version) |
-
-### Connection Status
-
-| Status | Value | Description |
-|--------|-------|-------------|
-| `DEVICE_NOT_CONNECT` | 0 | Not connected |
-| `DEVICE_TRY_CONNECT` | 1 | Attempting connection |
-| `DEVICE_CONNECTTED` | 2 | Connected |
-| `DEVICE_INIT_OK` | 3 | Initialization complete |
-| `DEVICE_OFF_LINE` | 4 | Device offline |
-| `DEVICE_CLOSE` | 5 | Connection closed |
+| Mode | Description |
+|------|-------------|
+| `P2P`  | The device is it's own access point, it will show up as a 2.4GHz Wifi AP named "iSuper-[numbershownonbike]" |
+| `AP`  | Connects to a saved network (2.4GHz only) |
 
 ### Connection Timeout
 
@@ -46,14 +34,15 @@ This document describes the communication protocol used by the iSuper Fitness ap
 All messages are ASCII strings enclosed in angle brackets `< >`:
 
 ```
-<COMMAND> or <COMMAND_PARAMETER>
+<COMMAND> or <COMMAND_PARAMETER> or <COMMAND_DATA1,DATA2,...>
 ```
 
-Messages are terminated with `>` character. The app splits incoming data by `>` delimiter.
+The app splits incoming data by `,` delimiter.
+CRLF characters may appear in the message and must be ignored. 
 
 ## Protocol States
 
-The protocol operates in four main states:
+The original App operates in four main states which won't be used by this implemenation:
 
 | State | Value | Description |
 |-------|-------|-------------|
@@ -69,13 +58,13 @@ The protocol operates in four main states:
 | Command | Direction | Description | Response |
 |---------|-----------|-------------|----------|
 | `<EQ_>` | App → Bike | Start initialization | `<EQ>` |
-| `<EP_[PASSWORD]>` | Bike → App | Send password for auth | `<EP_OK>` |
-| `<ET>` | Bike → App | End of transmission | `<ET_OK>` |
-| `<EM>` | Bike → App | Memory data | `<EM_OK>` |
-| `<ER_[MIN-MAX]>` | Bike → App | Resistance level range (min-max) | `<ER_OK>` |
-| `<EA_[DIAMETER]>` | Bike → App | Wheel diameter (×100) | `<EA_OK>` |
-| `<ED_[MAC/IP]>` | Bike → App | Device MAC/IP address | `<ED_OK>` |
-| `<EU>[UNIT]` | Bike → App | Unit type | `<EU_OK>` |
+| `<EP_[PASSWORD]>` | Bike → App | Send password for auth (0)  | `<EP_OK>` |
+| `<ET_[Type]>` | Bike → App | Type of equipment (ET_Upright for my bike) () | `<ET_OK>` |
+| `<EM_>` | Bike → App | Memory data (2)| `<EM_OK>` |
+| `<ER_[MIN-MAX]>` | Bike → App | Resistance level range (min-max)(1) | `<ER_OK>` |
+| `<EA_[HEX]>` | Bike → App | MAC address | `<EA_OK>` |
+| `<ED_[Diameter]>` | Bike → App | Wheel diameter * 100 | `<ED_OK>` |
+| `<EU_[UNIT]>` | Bike → App | Unit type | `<EU_OK>` |
 | `<Ez>` | Bike → App | End of init phase | `<Ez_OK>` |
 
 **Authentication**: The app expects password `"SUPERWIGH"` in `<EP_>` message. If wrong, `IMClass.errorType` is set to 1.
@@ -119,13 +108,13 @@ When requesting sport data with `<WB_6>`, the bike responds with:
 | Field      | Position | Length (Chars) | Description                  |
 |------------|----------|----------------|------------------------------|
 | `W6_`      | 0-3      | 4              | Header                       |
-| `SYNC`     | 4        | 1              | Distance value (×100)        |
-| `Unknown`  | 5-7      | 3              | RPM (revolutions per minute) |
-| `POWER`    | 8-10     | 3              | Heart rate/Pulse (bpm)       |
-| `PULSE`    | 11-13    | 3              | Current resistance level     |
-| `LEVEL`    | 14-15    | 2              | Calories burned (×100)       |
-| `DISTANCE` | 16-21    | 6              | Power output (watts)         |
-| `RPM`      | 22-24    | 3              | Current resistance level     |
+| `SYNC`     | 4        | 1              | Incrementing counter       |
+| `DISTANCE`  | 5-7      | 3              | Distance counter (Needs to be converted and handle overflow) |
+| `RPM`    | 8-10     | 3              | Cadence       |
+| `PULSE`    | 11-13    | 3              |  User BPM  |
+| `LEVEL`    | 14-15    | 2              | Current resistance level        |
+| `CALORIES` | 16-21    | 6              | Estimated burned calories        |
+| `POWER`      | 22-24    | 3              | Output Power (W)    |
 | `UNKNOWN`  | 25-26    | 2              |                              |
 
 ### Data Parsing
@@ -134,23 +123,38 @@ The app processes sport data with these conversions:
 
 **Distance Calculation:**
 ```
-f_dist = raw_distance / 100.0
-f_dist += (Hi_Dist_Value * 1000)
-final_distance = f_dist * diameter * 3.14 * 2.54 / 100000
-display_distance = round(final_distance * 10) / 10
+if old_raw_dist > raw_dist
+    Hi_Dist_Value ++ 
+old_raw_dist = raw_dist
+
+full_dist = Hi_Dist_Value*1000 + raw_dist
+
+conv_distance = (diameter * full_dist * 3.14 * 2.54) / 100000
+
 ```
 
 **Calories:**
 ```
-f_cal = raw_calories * 0.01
-display_calories = round(f_cal * 10) / 10
+f_cal = raw_calories / 100
 ```
 
 **Speed:**
+
+No speed information is available, in the app, speed is derived by :
+
 ```
-f_speed = rpm * 55 * 0.009 (approx 0.5)
-display_speed = round(f_speed * 10) / 10
+f_speed = rpm * 55 * 0.00478536
 ```
+
+
+**Diameter Parsing**
+
+```
+diameter = raw / 100
+```
+
+**Address parsing**
+The data received via EA_[HEX] is 6 bytes long it's the MAC address of the device
 
 ### Stored Data
 
@@ -233,7 +237,7 @@ Resets distance counter to 0
 ### Switch to AP Mode
 
 ```
-1. User initiates AP mode from UI
+1. User initiates AP mode from UI (Needs to be connected in P2P mode)
 2. App sets protocol status to PROTOCOL_TOAP (3)
 3. App sends: <AS_[SSID]>
 4. Bike responds: <AS>
@@ -241,7 +245,7 @@ Resets distance counter to 0
 6. Bike responds: <AK>
 7. App sends: <AP_>
 8. Bike responds: <AP>
-9. MCU switches to AP mode (AP becomes accessible)
+9. MCU switches to AP mode (Will connect to the registered network)
 ```
 
 ### Variable Storage
