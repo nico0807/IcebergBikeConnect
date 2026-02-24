@@ -1,0 +1,13 @@
+//Define number of segments : SEG:[NUMBER]
+SEGMENTS:9
+//Set difficulty/level changes (Applies at the beginning of the segment): SEG:[Startofsegment]:[level]
+SEG:1:2	//Warm up - level 2
+SEG:2:4	//Build up - level 4
+SEG:3:6	//Peak - level 6
+SEG:4:8	//Max intensity - level 8
+SEG:5:10	//Peak - level 10
+SEG:6:8	//Descend - level 8
+SEG:7:6	//Descend - level 6
+SEG:8:4	//Cool down start - level 4
+SEG:9:2	//Cool down end - level 2
+END

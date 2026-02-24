@@ -7,6 +7,8 @@ Handles all communication and data parsing for the bike.
 import socket
 import time
 import threading
+import csv
+import os
 from datetime import datetime
 
 
@@ -28,6 +30,12 @@ class ISuperBike:
         self.debug = debug
         self.running = False
         self.lock = threading.Lock()
+
+        # CSV logging
+        self.log_dir = "activity_logs"
+        self.csv_file = None
+        self.csv_writer = None
+        self.workout_start_time = None
 
         # Sport data
         self.distance = 0.0
@@ -569,3 +577,73 @@ class ISuperBike:
                 'wheel_diameter': self.wheel_diameter,
                 'mac_address': self.mac_address,
             }
+
+    def start_logging(self, program_name="manual"):
+        """Start CSV logging for workout"""
+        # Create log directory if it doesn't exist
+        os.makedirs(self.log_dir, exist_ok=True)
+
+        # Generate timestamped filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{self.log_dir}/workout_{timestamp}_{program_name}.csv"
+
+        try:
+            self.csv_file = open(filename, 'w', newline='')
+            self.csv_writer = csv.writer(self.csv_file)
+
+            # Write header
+            self.csv_writer.writerow([
+                'timestamp',
+                'elapsed_seconds',
+                'distance_km',
+                'speed_kmh',
+                'rpm',
+                'heart_rate_bpm',
+                'level',
+                'calories_kcal',
+                'watts'
+            ])
+
+            self.workout_start_time = datetime.now()
+            self.log(f"Started logging to {filename}")
+            return True
+        except Exception as e:
+            self.log(f"Error starting CSV log: {e}")
+            return False
+
+    def log_data(self):
+        """Log current data to CSV"""
+        if not self.csv_writer or not self.workout_start_time:
+            return
+
+        try:
+            elapsed = (datetime.now() - self.workout_start_time).total_seconds()
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            self.csv_writer.writerow([
+                timestamp,
+                f"{elapsed:.2f}",
+                f"{self.distance:.3f}",
+                f"{self.speed:.1f}",
+                self.rpm,
+                self.heart_rate,
+                self.level,
+                f"{self.calories:.1f}",
+                self.watts
+            ])
+            self.csv_file.flush()
+        except Exception as e:
+            self.log(f"Error logging data: {e}")
+
+    def stop_logging(self):
+        """Stop CSV logging"""
+        if self.csv_file:
+            try:
+                self.csv_file.close()
+                self.log("CSV logging stopped")
+            except:
+                pass
+            finally:
+                self.csv_file = None
+                self.csv_writer = None
+                self.workout_start_time = None

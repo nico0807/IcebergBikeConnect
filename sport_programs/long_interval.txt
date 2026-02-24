@@ -1,0 +1,13 @@
+//Define number of segments : SEG:[NUMBER]
+SEGMENTS:12
+//Set difficulty/level changes (Applies at the beginning of the segment): SEG:[Startofsegment]:[level]
+SEG:1:1	//Start at level 1
+//No change until the 4th segment
+SEG:4:3
+//then continue programming segments
+SEG:6:4
+SEG:9:5
+SEG:10:4
+SEG:11:3
+SEG:12:1
+END //End with a difficulty of 1

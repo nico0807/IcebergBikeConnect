@@ -1,0 +1,7 @@
+//Define number of segments : SEG:[NUMBER]
+SEGMENTS:3
+//Set difficulty/level changes (Applies at the beginning of the segment): SEG:[Startofsegment]:[level]
+SEG:1:1	//Start at level 1
+SEG:2:2	//Increase to level 2
+SEG:3:3	//Increase to level 3
+END

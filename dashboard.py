@@ -8,7 +8,9 @@ import curses
 import time
 import socket
 import math
+import re
 from isuper_bike import ISuperBike
+from sport_program_parser import SportProgramParser, SportProgram
 
 
 class Dashboard:
@@ -20,6 +22,14 @@ class Dashboard:
         self.running = True
         self.paused = False
         self.auto_update = True
+
+        # Sport program
+        self.program_parser = SportProgramParser()
+        self.program_parser.load_programs()
+        self.active_program = None
+        self.program_completed = False
+        self.last_level_change = 0
+        self.last_log_time = 0
 
         # Colors
         curses.start_color()
@@ -53,7 +63,8 @@ class Dashboard:
         if title:
             title_pos = max(1, (width - len(title)) // 2)
             try:
-                self.stdscr.addstr(y, x + title_pos, title, curses.color_pair(2) | curses.A_BOLD)
+                self.stdscr.addstr(y, x + title_pos, title,
+                                   curses.color_pair(2) | curses.A_BOLD)
             except:
                 pass
 
@@ -156,6 +167,228 @@ class Dashboard:
 
         return y + size + 2
 
+    def draw_program_selection(self):
+        """Draw program selection screen"""
+        self.stdscr.clear()
+        height, width = self.stdscr.getmaxyx()
+
+        # Header
+        header = " Select Sport Program "
+        try:
+            self.stdscr.addstr(0, (width - len(header)) // 2,
+                               header, curses.color_pair(1) | curses.A_BOLD)
+        except:
+            pass
+
+        programs = self.program_parser.list_programs()
+
+        if not programs:
+            try:
+                self.stdscr.addstr(height // 2 - 2, width // 2 - 15,
+                                   "No programs found in sport_programs/",
+                                   curses.color_pair(4) | curses.A_BOLD)
+                self.stdscr.addstr(height // 2, width // 2 - 20,
+                                   "Press [Q] to quit, [N] for manual mode",
+                                   curses.color_pair(6))
+            except:
+                pass
+            self.stdscr.refresh()
+            return None
+
+        # Draw program list
+        y = 4
+        try:
+            self.stdscr.addstr(y, 2, "Available Programs:",
+                               curses.color_pair(2) | curses.A_BOLD)
+            y += 2
+        except:
+            pass
+
+        for i, program in enumerate(programs, 1):
+            try:
+                self.stdscr.addstr(y, 4, f"[{i}] {program.name}",
+                                   curses.color_pair(6))
+                self.stdscr.addstr(y, 35, f"({program.total_segments} segments)",
+                                   curses.color_pair(3))
+                y += 1
+            except:
+                pass
+
+        y += 2
+        try:
+            self.stdscr.addstr(y, 2, "Controls:",
+                               curses.color_pair(2) | curses.A_BOLD)
+            y += 1
+            self.stdscr.addstr(y, 4, "[1-9] Select program",
+                               curses.color_pair(6))
+            y += 1
+            self.stdscr.addstr(y, 4, "[N] Manual mode (no program)",
+                               curses.color_pair(6))
+            y += 1
+            self.stdscr.addstr(y, 4, "[Q] Quit",
+                               curses.color_pair(6))
+        except:
+            pass
+
+        self.stdscr.refresh()
+
+        # Wait for selection
+        while True:
+            key = self.stdscr.getch()
+
+            if key == ord('q') or key == ord('Q'):
+                return None
+            elif key == ord('n') or key == ord('N'):
+                return None  # Manual mode
+            elif ord('1') <= key <= ord(str(len(programs))):
+                return programs[key - ord('1')]
+            elif key == curses.KEY_RESIZE:
+                self.draw_program_selection()
+
+    def get_duration_input(self):
+        """Get duration input from user"""
+        self.stdscr.clear()
+        height, width = self.stdscr.getmaxyx()
+
+        # Header
+        header = " Set Program Duration "
+        try:
+            self.stdscr.addstr(0, (width - len(header)) // 2,
+                               header, curses.color_pair(1) | curses.A_BOLD)
+        except:
+            pass
+
+        y = height // 2 - 2
+        try:
+            self.stdscr.addstr(y, width // 2 - 20,
+                               "Enter duration in minutes (1-180):",
+                               curses.color_pair(6))
+            self.stdscr.addstr(y + 1, width // 2 - 10,
+                               "Default: 30 minutes",
+                               curses.color_pair(3))
+        except:
+            pass
+
+        # Show cursor for input
+        curses.curs_set(1)
+
+        duration_str = ""
+        y = height // 2 + 1
+        x = width // 2 - 5
+
+        while True:
+            try:
+                self.stdscr.addstr(y, x, " " * 10)
+                self.stdscr.addstr(y, x, duration_str + "_",
+                                   curses.color_pair(2) | curses.A_BOLD)
+                self.stdscr.move(y, x + len(duration_str))
+            except:
+                pass
+            self.stdscr.refresh()
+
+            key = self.stdscr.getch()
+
+            if key == curses.KEY_ENTER or key in (10, 13):
+                if not duration_str:
+                    return 30  # Default
+                try:
+                    duration = int(duration_str)
+                    if 1 <= duration <= 180:
+                        return duration
+                    else:
+                        duration_str = ""
+                except:
+                    duration_str = ""
+            elif key == ord('q') or key == ord('Q'):
+                curses.curs_set(0)
+                return None
+            elif key == curses.KEY_BACKSPACE or key == 127:
+                duration_str = duration_str[:-1]
+            elif key == 27:  # ESC
+                curses.curs_set(0)
+                return None
+            elif ord('0') <= key <= ord('9'):
+                if len(duration_str) < 3:
+                    duration_str += chr(key)
+
+    def draw_program_progress(self):
+        """Draw sport program progress box"""
+        if not self.active_program:
+            return
+
+        height, width = self.stdscr.getmaxyx()
+
+        # Calculate progress
+        progress, remaining, current_seg = self.active_program.get_progress()
+        current_level, seg_remaining, _ = self.active_program.get_current_segment_info()
+
+        # Program info box
+        prog_y = 16
+        prog_width = 60
+        prog_x = width - prog_width - 2
+
+        self.draw_box(prog_y, prog_x, 7, prog_width,
+                      f"PROGRAM: {self.active_program.name.upper()}")
+
+        y = prog_y + 1
+        content_x = prog_x + 2  # Offset inside the box
+
+        # Progress bar
+        try:
+            progress_text = f"Progress: {progress:.1f}% | Time: {remaining:.0f}s remaining"
+            self.stdscr.addstr(y, content_x, progress_text,
+                               curses.color_pair(6))
+            y += 1
+
+            # Draw progress bar
+            bar_width = prog_width - 6
+            fill = int((progress / 100) * bar_width)
+            for i in range(bar_width):
+                if i < fill:
+                    try:
+                        self.stdscr.addch(
+                            y, content_x + i, curses.ACS_CKBOARD, curses.color_pair(2))
+                    except:
+                        self.stdscr.addstr(
+                            y, content_x + i, " ", curses.color_pair(2))
+                else:
+                    self.stdscr.addstr(y, content_x + i, " ",
+                                       curses.color_pair(6))
+            y += 1
+
+            # Segment info
+            seg_text = f"Segment: {current_seg}/{self.active_program.total_segments} | "
+            seg_text += f"Level: {current_level if current_level else 'N/A'} | "
+            seg_text += f"Next change: {seg_remaining:.0f}s"
+            self.stdscr.addstr(y, content_x, seg_text, curses.color_pair(3))
+
+            if self.program_completed:
+                self.stdscr.addstr(prog_y + 5, width // 2 - 10,
+                                   "PROGRAM COMPLETE!",
+                                   curses.color_pair(2) | curses.A_BOLD)
+        except:
+            pass
+
+    def update_program_level(self):
+        """Update bike level based on active program"""
+        if not self.active_program or self.paused or not self.bike or not self.bike.connected:
+            return
+
+        if self.active_program.completed:
+            self.program_completed = True
+            return
+
+        current_time = time.time()
+        if current_time - self.last_level_change < 1.0:  # Check every second
+            return
+
+        self.last_level_change = current_time
+        target_level = self.active_program.get_current_level()
+
+        if target_level and target_level != self.bike.level:
+            self.bike.set_level(
+                target_level, self.bike.resistance_min, self.bike.resistance_max)
+
     def update(self):
         """Update dashboard display"""
         self.stdscr.clear()
@@ -181,6 +414,17 @@ class Dashboard:
             status_parts.append("CONNECTED")
         else:
             status_parts.append("DISCONNECTED")
+
+        # Logging indicator
+        if self.bike.csv_file:
+            status_parts.append("[LOGGING]")
+
+        if self.active_program:
+            status_parts.append(f"[{self.active_program.name.upper()}]")
+            if self.program_completed:
+                status_parts.append("[COMPLETE]")
+        else:
+            status_parts.append("[MANUAL]")
 
         if self.paused:
             status_parts.append("[PAUSED]")
@@ -318,10 +562,14 @@ class Dashboard:
         help_y = dist_cal_y + 5
         try:
             help_text = (" Controls: [↑/↓] Level | [Space] Pause/Resume | [C] Clear Data | "
-                         "[A] Toggle Auto | [Q] Quit | [R] Reconnect ")
+                         "[A] Toggle Auto | [P] New Program | [Q] Quit | [R] Reconnect ")
             self.stdscr.addstr(help_y, 2, help_text, curses.color_pair(6))
         except:
             pass
+
+        # Draw program progress if active
+        if self.active_program:
+            self.draw_program_progress()
 
         self.stdscr.refresh()
 
@@ -343,7 +591,27 @@ class Dashboard:
         """Run dashboard main loop"""
         self.bike = ISuperBike(ip, debug)
 
+        # Program selection
+        self.stdscr.clear()
+        self.stdscr.addstr(0, 2, "Connecting to bike...", curses.color_pair(6))
+        self.stdscr.refresh()
+
+        program = self.draw_program_selection()
+
+        if program:
+            duration = self.get_duration_input()
+            if duration is None:
+                return
+
+            self.active_program = program
+            self.active_program.duration_minutes = duration
+            self.active_program.calculate_segment_duration()
+
+            # Reset cursor
+            curses.curs_set(0)
+
         # Connect and initialize
+        self.stdscr.clear()
         self.stdscr.addstr(0, 2, "Connecting to bike...", curses.color_pair(6))
         self.stdscr.refresh()
 
@@ -352,6 +620,15 @@ class Dashboard:
             if self.bike.initialize():
                 time.sleep(0.5)
                 self.bike.start_sport()
+
+                # Start program if selected
+                if self.active_program:
+                    self.active_program.start()
+
+                # Start CSV logging
+                program_name = self.active_program.name if self.active_program else "manual"
+                self.bike.start_logging(program_name)
+
                 self.auto_update = True
             else:
                 self.auto_update = False
@@ -394,6 +671,30 @@ class Dashboard:
                     self.paused = False
             elif key == ord('a') or key == ord('A'):
                 self.auto_update = not self.auto_update
+            elif key == ord('p') or key == ord('P'):  # New program
+                # Pause current
+                if self.bike and self.bike.connected:
+                    self.bike.pause_sport()
+                    self.paused = True
+
+                # Select new program
+                program = self.draw_program_selection()
+                if program:
+                    duration = self.get_duration_input()
+                    if duration is not None:
+                        self.active_program = program
+                        self.active_program.duration_minutes = duration
+                        self.active_program.calculate_segment_duration()
+                        self.active_program.start()
+                        self.program_completed = False
+
+                # Resume
+                curses.curs_set(0)
+                if self.bike and self.bike.connected:
+                    self.bike.start_sport()
+                    self.paused = False
+                else:
+                    self.auto_update = False
             elif key == ord('c') or key == ord('C'):  # Clear - handled above
                 pass
             elif key == ord('x'):  # Clear data
@@ -414,10 +715,20 @@ class Dashboard:
                     self.bike.update_data()
                     last_update = current_time
 
+                    # Log data every update (can be throttled if needed)
+                    if current_time - self.last_log_time >= 1.0:  # Log every second
+                        self.bike.log_data()
+                        self.last_log_time = current_time
+
+            # Update program level if active
+            if self.active_program:
+                self.update_program_level()
+
             # Update display
             self.update()
 
         # Cleanup
+        self.bike.stop_logging()
         self.bike.disconnect()
 
 
