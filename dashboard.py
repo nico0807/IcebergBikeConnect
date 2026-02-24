@@ -53,7 +53,7 @@ class Dashboard:
         if title:
             title_pos = max(1, (width - len(title)) // 2)
             try:
-                self.stdscr.addstr(y, title_pos, title, curses.color_pair(2))
+                self.stdscr.addstr(y, x + title_pos, title, curses.color_pair(2) | curses.A_BOLD)
             except:
                 pass
 
