@@ -132,11 +132,6 @@ class ISuperBike:
         clean_cmd = command.replace("<", "").replace(">", "")
         self.log(f"Received: {clean_cmd}")
 
-        # Check if this is just EA_ (command without data part)
-        if clean_cmd == "EA":
-            self.log("⏳ EA without data, waiting...")
-            return "wait_for_data"
-
         if clean_cmd.startswith("EA"):
             clean_cmd = clean_cmd.replace("\r\n", "")
 
@@ -189,12 +184,9 @@ class ISuperBike:
                 mac_bytes = [data[i:i+2] for i in range(0, 12, 2)]
                 self.mac_address = ":".join(mac_bytes).upper()
                 self.log(f"✓ MAC: {self.mac_address}")
-                return "mac"
             else:
-                # Fallback to hex parsing if not 12 chars
-                if self.parse_wheel_diameter_hex(data):
-                    return "diameter"
-            return "diameter_ack"
+                self.log("Empty EA message, ignoring...")
+            return "mac"
 
         elif cmd == "EA" and data == "OK":
             return "ea_ok"
@@ -363,24 +355,49 @@ class ISuperBike:
             self.log(f"! Sport data parse error: {e}")
             return False
 
-    def connect(self):
-        """Connect to bike over TCP"""
+    def connect(self, max_retries=2):
+        """Connect to bike over TCP with fallback to UDP"""
         self.log(f"Attempting to connect to {self.ip}:{self.PORT}...")
-        try:
-            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.socket.settimeout(self.TIMEOUT)
-            self.socket.connect((self.ip, self.PORT))
-            self.connected = True
-            self.log(f"Connected successfully to {self.ip}:{self.PORT}")
-            return True
-        except socket.timeout:
-            self.log(f"Connection timeout to {self.ip}")
-        except ConnectionRefusedError:
-            self.log(f"Connection refused by {self.ip}")
-        except socket.gaierror:
-            self.log(f"DNS error: unable to resolve {self.ip}")
-        except Exception as e:
-            self.log(f"Connection error: {e}")
+
+        for attempt in range(max_retries):
+            try:
+                self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                self.socket.settimeout(self.TIMEOUT)
+                # self.socket.bind(('192.168.0.31', 0))
+                self.socket.connect((self.ip, self.PORT))
+                self.connected = True
+                self.log(f"Connected successfully to {self.ip}:{self.PORT}")
+                return True
+            except socket.timeout:
+                self.log(f"Connection timeout to {self.ip}")
+            except ConnectionRefusedError:
+                self.log(f"Connection refused by {self.ip}")
+            except socket.gaierror:
+                self.log(f"DNS error: unable to resolve {self.ip}")
+            except Exception as e:
+                self.log(f"Connection error: {e}")
+
+            # If connection failed and we have retries left, try UDP fallback
+            if attempt < max_retries - 1:
+                self.log(
+                    f"Attempting UDP fallback (attempt {attempt + 1}/{max_retries})...")
+                try:
+                    # Send SUPERWIGH via UDP to potentially wake/authenticate the device
+                    udp_socket = socket.socket(
+                        socket.AF_INET, socket.SOCK_DGRAM)
+                    udp_socket.settimeout(1.0)
+                    message = "SUPERWIGH"
+                    udp_socket.sendto(message.encode(
+                        'ascii'), ('<broadcast>', self.PORT))
+                    self.log(
+                        f"Broadcast '{message}' via UDP")
+                    udp_socket.close()
+
+                    # Wait a moment before retrying TCP
+                    time.sleep(0.5)
+                except Exception as e:
+                    self.log(f"UDP fallback error: {e}")
+
         return False
 
     def disconnect(self):
@@ -446,7 +463,7 @@ class ISuperBike:
 
         # Receive loop with timeout
         init_done = False
-        for i in range(50):  # 50 iterations = ~10 seconds
+        for i in range(10):  # 50 iterations = ~10 seconds
 
             responses = self.receive(timeout=2.0)
             if not responses:
@@ -617,7 +634,8 @@ class ISuperBike:
             return
 
         try:
-            elapsed = (datetime.now() - self.workout_start_time).total_seconds()
+            elapsed = (datetime.now() -
+                       self.workout_start_time).total_seconds()
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             self.csv_writer.writerow([
@@ -647,3 +665,43 @@ class ISuperBike:
                 self.csv_file = None
                 self.csv_writer = None
                 self.workout_start_time = None
+
+    def configure_ap(self, ssid, password):
+        """Configure bike to connect to WiFi network in AP mode"""
+        print(f"Configuring AP mode for SSID: {ssid}")
+
+        # Send SSID
+        ssid_cmd = f"<AS_{ssid}>"
+        self.send(ssid_cmd)
+        resp = self.receive(timeout=2.0)
+
+        if resp and "<AS>" in resp:
+            print("SSID acknowledged")
+        else:
+            print("Warning: SSID not acknowledged")
+
+        # Send password
+        pwd_cmd = f"<AK_{password}>"
+        self.send(pwd_cmd)
+        resp = self.receive(timeout=2.0)
+
+        if resp and "<AK>" in resp:
+            print("Password acknowledged")
+        else:
+            print("Warning: Password not acknowledged")
+
+        # Trigger AP mode switch
+        self.send("<AP_>")
+        resp = self.receive(timeout=5.0)
+
+        if resp and "<AP>" in resp:
+            print("AP mode activated successfully!")
+            print("\n=== IMPORTANT ===")
+            print("The bike is now switching to AP mode.")
+            print("Please switch your device WiFi to connect to: " + ssid)
+            print("Then run the dashboard with your local network IP.")
+            print("==================\n")
+            return True
+        else:
+            print("Error: AP mode activation failed")
+            return False

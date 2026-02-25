@@ -735,17 +735,43 @@ class Dashboard:
 def main():
     """Main entry point"""
     import argparse
+    import getpass
 
     parser = argparse.ArgumentParser(
         description='iSuper Bike Dashboard - AP Mode')
     parser.add_argument('--ip', default='169.254.1.1',
-                        help='Bike IP address (default: 192.168.1.54)')
+                        help='Bike IP address (default: 169.254.1.1)')
     parser.add_argument('--debug', action='store_true',
                         help='Enable debug logging')
     parser.add_argument('--list-ips', action='store_true',
                         help='Scan for available bikes on local network')
+    parser.add_argument('--configure-ap', metavar='SSID',
+                        help='Configure bike AP mode with WiFi SSID (requires password)')
 
     args = parser.parse_args()
+
+    # AP Configuration mode
+    if args.configure_ap:
+        print(f"\n=== AP Configuration Mode ===")
+        print(f"Target SSID: {args.configure_ap}")
+
+        password = getpass.getpass("Enter WiFi password (hidden): ")
+
+        bike = ISuperBike(args.ip, args.debug)
+
+        print(f"\nConnecting to bike at {args.ip}...")
+        if bike.connect():
+            time.sleep(0.5)
+            print("Initializing connection...")
+            if bike.initialize():
+                time.sleep(0.5)
+                bike.configure_ap(args.configure_ap, password)
+                bike.disconnect()
+            else:
+                print("Failed to initialize bike connection")
+        else:
+            print("Failed to connect to bike")
+        return
 
     # IP scanner
     if args.list_ips:

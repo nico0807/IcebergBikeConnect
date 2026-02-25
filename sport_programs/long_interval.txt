@@ -6,7 +6,7 @@ SEG:1:1	//Start at level 1
 SEG:4:3
 //then continue programming segments
 SEG:6:4
-SEG:9:5
+SEG:9:6
 SEG:10:4
 SEG:11:3
 SEG:12:1
