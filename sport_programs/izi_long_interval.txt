@@ -3,12 +3,12 @@ SEGMENTS:12
 //Set difficulty/level changes (Applies at the beginning of the segment): SEG:[Startofsegment]:[level]
 SEG:1:1	//Start at level 1
 //No change until the 3th segment
-SEG:3:4
+SEG:3:2
 //then continue programming segments
-SEG:6:5
-SEG:7:6
-SEG:9:8
-SEG:10:6
-SEG:11:4
-SEG:12:2
+SEG:6:3
+SEG:7:4
+SEG:9:6
+SEG:10:4
+SEG:11:2
+SEG:12:1
 END //End with a difficulty of 1

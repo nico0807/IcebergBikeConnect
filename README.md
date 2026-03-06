@@ -14,6 +14,7 @@ A Python-based dashboard and client for iSuper gym bikes. This project implement
 - **Manual Control**: Adjust resistance levels on the fly with keyboard shortcuts
 - **Data Logging**: Automatic CSV export of all workout sessions to `activity_logs/`
 - **Dual WiFi Modes**: Support for both P2P (direct) and AP (router) connection modes
+- **Screen Wake Lock**: Automatically prevents screen from turning off during workouts (cross-platform)
 
 ## Quick Start
 
@@ -38,6 +39,9 @@ python dashboard.py --ip 169.254.1.1
 
 # Enable debug logging for troubleshooting
 python dashboard.py --ip 169.254.1.1 --debug
+
+# Disable screen wake lock (allow screen to turn off)
+python dashboard.py --ip 169.254.1.1 --no-wake-lock
 ```
 
 ## Usage
@@ -67,6 +71,8 @@ python dashboard.py --ip 169.254.1.1 --debug
 | `P` | Select new workout program |
 | `R` | Reconnect to bike |
 | `Q` | Quit dashboard |
+
+**Screen Wake Lock**: The dashboard automatically prevents your screen from turning off during workouts. This is enabled by default. Use `--no-wake-lock` to disable this feature if you prefer normal screen behavior.
 
 ### Workout Programs
 
@@ -113,7 +119,7 @@ The project implements the iSuper bike's proprietary ASCII-based protocol over T
 ### Core Components
 
 - **[isuper_bike.py](isuper_bike.py)** - Protocol client handling connection, initialization, and data parsing
-- **[dashboard.py](dashboard.py)** - Terminal UI with curses, keyboard input, and program integration
+- **[dashboard.py](dashboard.py)** - Terminal UI with curses, keyboard input, program integration, and screen wake lock
 - **[sport_program_parser.py](sport_program_parser.py)** - Program file parser and workout state management
 
 ### Data Logging
@@ -154,12 +160,30 @@ Columns include:
 - Press `R` to reconnect if connection dropped
 - Check if bike is in standby mode
 
+### Screen Wake Lock Issues
+
+**Screen still turns off despite wake lock enabled**
+- Windows: Ensure you have admin privileges to change power settings
+- macOS: Verify `caffeinate` command is available (standard on all macOS versions)
+- Linux: Install `x11-utils` for xset support: `sudo apt install x11-utils`
+
+**Wake lock not working**
+- Check for error messages in console output
+- Try running with `--no-wake-lock` to disable the feature
+- Ensure no other power management software is overriding settings
+
+**Can't restore original sleep settings**
+- Simply restart your computer to reset all power settings
+- Manually check your system's power/sleep settings
+- The wake lock only modifies temporary settings that reset on reboot
+
 ### Known Limitations
 
 - Distance counter wraps around at 1000; client handles this automatically
 - Resistance level range varies by bike model (typically 1-20)
 - Heart rate monitor requires compatible chest strap or hand sensors
 - Windows requires `windows-curses` package for terminal UI
+- Screen wake lock may not work in all Linux environments (e.g., Wayland)
 
 ## Documentation
 

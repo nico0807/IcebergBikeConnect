@@ -9,8 +9,145 @@ import time
 import socket
 import math
 import re
+import platform
+import subprocess
 from isuper_bike import ISuperBike
 from sport_program_parser import SportProgramParser, SportProgram
+
+
+class ScreenWakeKeeper:
+    """Prevents screen from turning off while dashboard is running"""
+
+    def __init__(self):
+        self.system = platform.system()
+        self.wake_process = None
+        self.original_settings = None  # Store original sleep settings
+        self.wake_thread = None  # For Windows API approach
+
+    def enable_wake_lock(self):
+        """Enable wake lock to prevent screen sleep"""
+        try:
+            if self.system == "Windows":
+                # Windows: Use ctypes with Windows API for reliable wake prevention
+                # This is the most reliable method as it directly calls Windows API
+                # without needing to parse powercfg output or install external libraries
+                try:
+                    import ctypes
+                    from threading import Thread, Event
+
+                    # Define Windows API constants
+                    ES_CONTINUOUS = 0x80000000
+                    ES_DISPLAY_REQUIRED = 0x00000002
+                    ES_SYSTEM_REQUIRED = 0x00000001
+
+                    self.wake_stop_event = Event()
+                    self.wake_thread = None
+
+                    def keep_awake():
+                        """Keep display on and system awake using Windows API"""
+                        while not self.wake_stop_event.is_set():
+                            ctypes.windll.kernel32.SetThreadExecutionState(
+                                ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED
+                            )
+                            # Sleep for a bit to avoid busy waiting
+                            self.wake_stop_event.wait(5)
+
+                    # Start the wake lock thread
+                    self.wake_thread = Thread(target=keep_awake, daemon=True)
+                    self.wake_thread.start()
+                    print("✓ Wake lock enabled (Windows)")
+
+                except Exception as e:
+                    print(f"⚠ Could not enable wake lock: {e}")
+                    # Fallback to powercfg method
+                    subprocess.run([
+                        'powercfg', '/change', 'monitor-timeout-ac', '0'
+                    ], capture_output=True)
+                    subprocess.run([
+                        'powercfg', '/change', 'standby-timeout-ac', '0'
+                    ], capture_output=True)
+                    print("✓ Wake lock enabled (Windows - fallback)")
+
+            elif self.system == "Darwin":  # macOS
+                # macOS: Use caffeinate command
+                self.wake_process = subprocess.Popen(
+                    ['caffeinate', '-d', '-u'],  # Prevent display and idle sleep
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                print("✓ Wake lock enabled (macOS)")
+
+            elif self.system == "Linux":
+                # Linux: Use xset or systemd-inhibit
+                try:
+                    # Try xset first (X11)
+                    subprocess.run([
+                        'xset', 's', 'off'
+                    ], capture_output=True, check=True)
+                    subprocess.run([
+                        'xset', 's', 'noblank'
+                    ], capture_output=True, check=True)
+                    print("✓ Wake lock enabled (Linux - xset)")
+                except (subprocess.CalledProcessError, FileNotFoundError):
+                    # Fallback to systemd-inhibit
+                    try:
+                        self.wake_process = subprocess.Popen([
+                            'systemd-inhibit',
+                            '--what=sleep',
+                            '--who=iSuper Bike Dashboard',
+                            '--why=Workout in progress',
+                            '--mode=block',
+                            'sleep', 'infinity'
+                        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        print("✓ Wake lock enabled (Linux - systemd-inhibit)")
+                    except FileNotFoundError:
+                        print("⚠ Could not enable wake lock (Linux)")
+
+            return True
+
+        except Exception as e:
+            print(f"⚠ Could not enable wake lock: {e}")
+            return False
+
+    def disable_wake_lock(self):
+        """Disable wake lock and restore normal sleep behavior"""
+        try:
+            if self.system == "Windows":
+                # Stop the Windows API wake lock thread if running
+                if self.wake_stop_event:
+                    self.wake_stop_event.set()
+                    if self.wake_thread:
+                        self.wake_thread.join(timeout=2)
+                    print("✓ Wake lock disabled (Windows)")
+                else:
+                    print("✓ Wake lock disabled (Windows) - Settings unchanged")
+
+            elif self.system == "Darwin":  # macOS
+                # Kill caffeinate process
+                if self.wake_process:
+                    self.wake_process.terminate()
+                    self.wake_process.wait()
+                    self.wake_process = None
+                print("✓ Wake lock disabled (macOS)")
+
+            elif self.system == "Linux":
+                # Kill systemd-inhibit process if running
+                if self.wake_process:
+                    self.wake_process.terminate()
+                    self.wake_process.wait()
+                    self.wake_process = None
+
+                # Restore xset settings
+                try:
+                    subprocess.run([
+                        'xset', 's', 'on'
+                    ], capture_output=True)
+                    print("✓ Wake lock disabled (Linux)")
+                except FileNotFoundError:
+                    pass
+
+        except Exception as e:
+            print(f"⚠ Could not disable wake lock: {e}")
 
 
 class Dashboard:
@@ -22,6 +159,9 @@ class Dashboard:
         self.running = True
         self.paused = False
         self.auto_update = True
+
+        # Screen wake keeper
+        self.wake_keeper = ScreenWakeKeeper()
 
         # Sport program
         self.program_parser = SportProgramParser()
@@ -587,9 +727,15 @@ class Dashboard:
 
         self.stdscr.refresh()
 
-    def run(self, ip, debug):
+    def run(self, ip, debug, no_wake_lock=False):
         """Run dashboard main loop"""
         self.bike = ISuperBike(ip, debug)
+
+        # Enable wake lock to prevent screen from turning off (unless disabled)
+        if not no_wake_lock:
+            self.wake_keeper.enable_wake_lock()
+        else:
+            print("Wake lock disabled (--no-wake-lock flag)")
 
         # Program selection
         self.stdscr.clear()
@@ -731,6 +877,10 @@ class Dashboard:
         self.bike.stop_logging()
         self.bike.disconnect()
 
+        # Disable wake lock and restore normal sleep behavior (if it was enabled)
+        if not no_wake_lock:
+            self.wake_keeper.disable_wake_lock()
+
 
 def main():
     """Main entry point"""
@@ -747,6 +897,8 @@ def main():
                         help='Scan for available bikes on local network')
     parser.add_argument('--configure-ap', metavar='SSID',
                         help='Configure bike AP mode with WiFi SSID (requires password)')
+    parser.add_argument('--no-wake-lock', action='store_true',
+                        help='Disable wake lock (allow screen to turn off)')
 
     args = parser.parse_args()
 
@@ -803,7 +955,7 @@ def main():
     # Run dashboard
     try:
         curses.wrapper(lambda stdscr: Dashboard(
-            stdscr).run(args.ip, args.debug))
+            stdscr).run(args.ip, args.debug, args.no_wake_lock))
     except KeyboardInterrupt:
         print("\nDashboard stopped by user")
     except Exception as e:

@@ -32,6 +32,7 @@ python dashboard.py [options]
 - `--debug` - Enable debug logging to console
 - `--list-ips` - Scan local network for bikes
 - `--configure-ap <SSID>` - Configure bike to connect to a WiFi network (requires password prompt)
+- `--no-wake-lock` - Disable automatic screen wake prevention (enabled by default)
 
 ### Quick Connection
 
@@ -85,6 +86,10 @@ The bike uses a custom ASCII-based protocol over TCP port 1971:
 - Handles keyboard input (level control, pause/resume, program selection)
 - Integrates with `SportProgram` for automated workout programs
 - Auto-updates bike data at 200ms intervals
+- **`ScreenWakeKeeper` class**: Automatically prevents screen from turning off during workouts
+  - Windows: Uses `powercfg` to disable monitor and standby timeouts
+  - macOS: Uses `caffeinate` command to prevent display and idle sleep
+  - Linux: Uses `xset` or `systemd-inhibit` to prevent sleep
 
 **`SportProgram` class ([sport_program_parser.py](sport_program_parser.py)):**
 - Loads workout programs from `sport_programs/` directory
@@ -138,3 +143,4 @@ Workouts are automatically logged to CSV files:
 - **Protocol Timeout**: The bike expects responses within 200ms. No response after 30 messages = connection lost.
 - **Authentication**: Password is hardcoded as `"SUPERWIGH"`.
 - **Level Zero-Indexing**: `CR_00` corresponds to Level 1, so the code subtracts 1 when setting levels.
+- **Screen Wake Lock**: The dashboard automatically prevents your screen from turning off during workouts. This is enabled by default but can be disabled with `--no-wake-lock`. Original system sleep settings are automatically restored when the dashboard exits.

@@ -386,11 +386,13 @@ class ISuperBike:
                     udp_socket = socket.socket(
                         socket.AF_INET, socket.SOCK_DGRAM)
                     udp_socket.settimeout(1.0)
+                    # Enable broadcast mode (required on Windows)
+                    udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                     message = "SUPERWIGH"
-                    udp_socket.sendto(message.encode(
-                        'ascii'), ('<broadcast>', self.PORT))
-                    self.log(
-                        f"Broadcast '{message}' via UDP")
+                    # Use proper broadcast address for local network
+                    broadcast_ip = '255.255.255.255'
+                    udp_socket.sendto(message.encode('ascii'), (broadcast_ip, self.PORT))
+                    self.log(f"Broadcast '{message}' via UDP to {broadcast_ip}")
                     udp_socket.close()
 
                     # Wait a moment before retrying TCP
