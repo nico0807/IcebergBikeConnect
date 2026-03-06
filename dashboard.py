@@ -727,9 +727,9 @@ class Dashboard:
 
         self.stdscr.refresh()
 
-    def run(self, ip, debug, no_wake_lock=False):
+    def run(self, ip, no_wake_lock=False):
         """Run dashboard main loop"""
-        self.bike = ISuperBike(ip, debug)
+        self.bike = ISuperBike(ip, debug=False)  # Debug always enabled via file logging
 
         # Enable wake lock to prevent screen from turning off (unless disabled)
         if not no_wake_lock:
@@ -854,17 +854,16 @@ class Dashboard:
                     self.bike.set_level(
                         self.bike.level - 1, self.bike.resistance_min, self.bike.resistance_max)
 
-            # Auto-update data
+            # Receive sport data (passive - bike sends data automatically after CP_000)
             if self.auto_update and self.bike and self.bike.connected:
-                current_time = time.time()
-                if current_time - last_update >= self.bike.POLL_INTERVAL:
-                    self.bike.update_data()
-                    last_update = current_time
+                self.bike.receive_sport_data()
+                last_update = time.time()
 
-                    # Log data every update (can be throttled if needed)
-                    if current_time - self.last_log_time >= 1.0:  # Log every second
-                        self.bike.log_data()
-                        self.last_log_time = current_time
+                # Log data every second
+                current_time = time.time()
+                if current_time - self.last_log_time >= 1.0:
+                    self.bike.log_data()
+                    self.last_log_time = current_time
 
             # Update program level if active
             if self.active_program:
@@ -891,8 +890,6 @@ def main():
         description='iSuper Bike Dashboard - AP Mode')
     parser.add_argument('--ip', default='169.254.1.1',
                         help='Bike IP address (default: 169.254.1.1)')
-    parser.add_argument('--debug', action='store_true',
-                        help='Enable debug logging')
     parser.add_argument('--list-ips', action='store_true',
                         help='Scan for available bikes on local network')
     parser.add_argument('--configure-ap', metavar='SSID',
@@ -909,7 +906,7 @@ def main():
 
         password = getpass.getpass("Enter WiFi password (hidden): ")
 
-        bike = ISuperBike(args.ip, args.debug)
+        bike = ISuperBike(args.ip, debug=False)  # Debug always enabled via file logging
 
         print(f"\nConnecting to bike at {args.ip}...")
         if bike.connect():
@@ -955,7 +952,7 @@ def main():
     # Run dashboard
     try:
         curses.wrapper(lambda stdscr: Dashboard(
-            stdscr).run(args.ip, args.debug, args.no_wake_lock))
+            stdscr).run(args.ip, args.no_wake_lock))
     except KeyboardInterrupt:
         print("\nDashboard stopped by user")
     except Exception as e:

@@ -29,7 +29,6 @@ python dashboard.py [options]
 
 **Options:**
 - `--ip <IP>` - Bike IP address (default: `169.254.1.1` : The P2P mode default)
-- `--debug` - Enable debug logging to console
 - `--list-ips` - Scan local network for bikes
 - `--configure-ap <SSID>` - Configure bike to connect to a WiFi network (requires password prompt)
 - `--no-wake-lock` - Disable automatic screen wake prevention (enabled by default)
@@ -43,8 +42,8 @@ python dashboard.py --list-ips
 # Connect to specific IP
 python dashboard.py --ip 192.168.4.1
 
-# With debug output
-python dashboard.py --ip 192.168.4.1 --debug
+# With debug output (automatically logged to debug_logs/ directory)
+python dashboard.py --ip 192.168.4.1
 ```
 
 ## Architecture
@@ -61,10 +60,10 @@ The bike uses a custom ASCII-based protocol over TCP port 1971:
 5. End init with `<Ez_OK>` and pause sport with `<CP_300>`
 
 **Sport Mode:**
-- Start: Send `<WB_6>` followed by `<CP_000>`
-- Poll data: Send `<WB_6>` every 200ms, receive `<W6_DATA>` response
+- Start: Send `<CP_000>` - this starts the activity and bike automatically sends sport data periodically
+- Data: Bike automatically sends `<W6_DATA>` responses after `CP_000`
+- Stop: Send `<CP_300>` - this stops the activity and bike stops sending sport data
 - Set level: Send `<CR_nn>` where nn is level 00-99 (zero-padded)
-- Pause: Send `<CP_300>`
 
 **Sport Data Format (`<W6_SYNC,DISTANCE,RPM,PULSE,LEVEL,CALORIES,POWER,UNKNOWN>`):**
 - Distance requires wrap-around handling (counter resets at 1000)
@@ -77,7 +76,7 @@ The bike uses a custom ASCII-based protocol over TCP port 1971:
 - Manages TCP connection to bike
 - Handles protocol initialization sequence
 - Parses incoming ASCII commands via `parse_command()`
-- Manages sport data updates with `update_data()`
+- Receives sport data automatically from bike using `receive_sport_data()` (passive mode)
 - Thread-safe data access via `lock` attribute
 - CSV logging to `activity_logs/` directory
 
@@ -85,7 +84,7 @@ The bike uses a custom ASCII-based protocol over TCP port 1971:
 - Curses-based terminal UI
 - Handles keyboard input (level control, pause/resume, program selection)
 - Integrates with `SportProgram` for automated workout programs
-- Auto-updates bike data at 200ms intervals
+- Receives bike data automatically (bike sends data periodically after sport mode is started)
 - **`ScreenWakeKeeper` class**: Automatically prevents screen from turning off during workouts
   - Windows: Uses `powercfg` to disable monitor and standby timeouts
   - macOS: Uses `caffeinate` command to prevent display and idle sleep
@@ -135,6 +134,14 @@ Workouts are automatically logged to CSV files:
 - Location: `activity_logs/workout_YYYYMMDD_HHMMSS_[program_name].csv`
 - Columns: timestamp, elapsed_seconds, distance_km, speed_kmh, rpm, heart_rate_bpm, level, calories_kcal, watts
 - Data logged at 1-second intervals during active sessions
+
+### Debug Logging
+
+Debug information is automatically logged to timestamped files:
+- Location: `debug_logs/session_YYYYMMDD_HHMMSS.log`
+- Contains all protocol communication, connection details, and error messages
+- Created automatically for each session
+- No command-line flags needed - logging is always enabled
 
 ## Important Notes
 

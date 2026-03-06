@@ -37,6 +37,11 @@ class ISuperBike:
         self.csv_writer = None
         self.workout_start_time = None
 
+        # Debug logging
+        self.debug_log_dir = "debug_logs"
+        self.debug_log_file = None
+        self.setup_debug_logging()
+
         # Sport data
         self.distance = 0.0
         self.rpm = 0
@@ -64,11 +69,34 @@ class ISuperBike:
         self.old_distance = 0.0
         self.hi_dist_value = 0
 
+    def setup_debug_logging(self):
+        """Setup timestamped debug log file"""
+        os.makedirs(self.debug_log_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_filename = f"{self.debug_log_dir}/session_{timestamp}.log"
+        self.debug_log_file = open(log_filename, 'w', encoding='utf-8')
+        # Write header
+        self.debug_log_file.write(f"=== iSuper Bike Session Log ===\n")
+        self.debug_log_file.write(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        self.debug_log_file.write(f"Bike IP: {self.ip}\n")
+        self.debug_log_file.write("=" * 40 + "\n\n")
+
     def log(self, message):
-        """Debug logging"""
+        """Debug logging - always writes to timestamped log file"""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        log_message = f"[{timestamp}] {message}\n"
+
+        # Write to log file
+        if self.debug_log_file:
+            try:
+                self.debug_log_file.write(log_message)
+                self.debug_log_file.flush()  # Ensure immediate write
+            except:
+                pass
+
+        # Also print to console if debug mode is enabled
         if self.debug:
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            print(f"[{timestamp}] {message}")
+            print(f"[{timestamp}] {message}", flush=True)
 
     def parse_wheel_diameter_hex(self, hex_data):
         """Parse wheel diameter from hex like '20f85e21fea8'"""
@@ -184,12 +212,13 @@ class ISuperBike:
                 mac_bytes = [data[i:i+2] for i in range(0, 12, 2)]
                 self.mac_address = ":".join(mac_bytes).upper()
                 self.log(f"✓ MAC: {self.mac_address}")
-            else:
-                self.log("Empty EA message, ignoring...")
+
             return "mac"
 
-        elif cmd == "EA" and data == "OK":
-            return "ea_ok"
+        elif cmd == "EA" and data == None:
+            self.log("Empty EA message, ignoring...")
+            self.mac_address = "XX:XX:XX:XX:XX:XX"
+            return "mac"
 
         # ED sends wheel diameter according to protocol (diameter / 100)
         elif cmd == "ED" and data:
@@ -249,6 +278,10 @@ class ISuperBike:
 
         elif cmd == "W6" and data == "OK":
             return "sport_ack"
+
+        elif cmd == "WB" and data == "OK":
+            # WB_6 acknowledgment (no longer needed since we use passive receiving)
+            return "wb_ack"
 
         elif cmd == "CP" and data == "OK":
             return "cp_ack"
@@ -387,12 +420,15 @@ class ISuperBike:
                         socket.AF_INET, socket.SOCK_DGRAM)
                     udp_socket.settimeout(1.0)
                     # Enable broadcast mode (required on Windows)
-                    udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                    udp_socket.setsockopt(
+                        socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
                     message = "SUPERWIGH"
                     # Use proper broadcast address for local network
                     broadcast_ip = '255.255.255.255'
-                    udp_socket.sendto(message.encode('ascii'), (broadcast_ip, self.PORT))
-                    self.log(f"Broadcast '{message}' via UDP to {broadcast_ip}")
+                    udp_socket.sendto(message.encode('ascii'),
+                                      (broadcast_ip, self.PORT))
+                    self.log(
+                        f"Broadcast '{message}' via UDP to {broadcast_ip}")
                     udp_socket.close()
 
                     # Wait a moment before retrying TCP
@@ -413,6 +449,16 @@ class ISuperBike:
                 pass
         self.connected = False
         self.log("Disconnected")
+
+        # Close debug log file
+        if self.debug_log_file:
+            try:
+                self.debug_log_file.write(f"\n=== Session Ended ===\n")
+                self.debug_log_file.write(f"Ended: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                self.debug_log_file.close()
+                self.debug_log_file = None
+            except:
+                pass
 
     def send(self, command):
         """Send command to bike"""
@@ -479,7 +525,7 @@ class ISuperBike:
                 # 1. <EQ> - init acknowledged (handled in parse_command)
                 # 2. <EP_SUPERWIGH> - password
                 if result == "password":
-                    self.send("<EP_OK>")
+                    # self.send("<EP_OK>") #No need to acknowledge password
                     time.sleep(0.1)
                 # 3. <ER_1-20> - resistance range (min-max)
                 elif result == "resistance":
@@ -505,7 +551,7 @@ class ISuperBike:
                 elif result == "init_complete":
                     self.send("<Ez_OK>")
                     time.sleep(0.1)
-                    self.send("<CP_300>")  # Pause after init
+                    # self.send("<CP_300>")  # Pause after init
 
                     init_done = True
                     self.log("Init complete")
@@ -516,17 +562,17 @@ class ISuperBike:
             self.initialized = True
             return True
 
-        self.log("Init incomplete but continuing...")
+        # Force send Ez_OK to indicate connection is complete
+        self.log("Init incomplete but continuing... sending Ez_OK to complete connection")
+        self.send("<Ez_OK>")
         self.initialized = True
         return True
 
     def start_sport(self):
-        """Start sport mode"""
+        """Start sport mode - CP_000 starts the activity and bike automatically sends sport data"""
         self.log("Starting sport mode...")
-        self.send("<WB_6>")
-        time.sleep(0.1)
         self.send("<CP_000>")
-        self.log("Sport mode active ✓")
+        self.log("Sport mode active - bike will send data automatically ✓")
 
     def pause_sport(self):
         """Pause sport"""
@@ -557,19 +603,19 @@ class ISuperBike:
             self.old_distance = 0.0
         self.log("Data cleared")
 
-    def update_data(self):
-        """Update sport data from bike"""
+    def receive_sport_data(self):
+        """Receive sport data from bike (passive - bike sends data automatically after CP_000)"""
         if not self.connected:
             return False
 
-        self.send("<WB_6>")
-        responses = self.receive(timeout=0.5)
+        responses = self.receive(timeout=0.1)  # Short timeout for passive receiving
 
         if responses:
             for response in responses:
                 result = self.parse_command(response)
 
                 if result == "sport_data":
+                    # Acknowledge received data
                     self.send("<W6_OK>")
                     return True
 
