@@ -401,7 +401,7 @@ class ISuperBike:
                 pass
 
     def connect(self, max_retries=2):
-        """Connect to bike over TCP with fallback to UDP"""
+        """Connect to bike over TCP"""
         self.log(f"Attempting to connect to {self.ip}:{self.PORT}...")
         self._report_progress(f"Connecting to {self.ip}...")
 
@@ -409,7 +409,6 @@ class ISuperBike:
             try:
                 self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self.socket.settimeout(self.TIMEOUT)
-                # self.socket.bind(('192.168.0.31', 0))
                 self.socket.connect((self.ip, self.PORT))
                 self.connected = True
                 self.log(f"Connected successfully to {self.ip}:{self.PORT}")
@@ -429,33 +428,9 @@ class ISuperBike:
                 self.log(f"Connection error: {e}")
                 self._report_progress(f"Error: {e}")
 
-            # If connection failed and we have retries left, try UDP fallback
             if attempt < max_retries - 1:
-                self.log(
-                    f"Attempting UDP fallback (attempt {attempt + 1}/{max_retries})...")
-                self._report_progress("Sending UDP unlock broadcast...")
-                try:
-                    # Send SUPERWIGH via UDP to potentially wake/authenticate the device
-                    udp_socket = socket.socket(
-                        socket.AF_INET, socket.SOCK_DGRAM)
-                    udp_socket.settimeout(1.0)
-                    # Enable broadcast mode (required on Windows)
-                    udp_socket.setsockopt(
-                        socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-                    message = "SUPERWIGH"
-                    # Use proper broadcast address for local network
-                    broadcast_ip = '255.255.255.255'
-                    udp_socket.sendto(message.encode('ascii'),
-                                      (broadcast_ip, self.PORT))
-                    self.log(
-                        f"Broadcast '{message}' via UDP to {broadcast_ip}")
-                    udp_socket.close()
-
-                    # Wait a moment before retrying TCP
-                    self._report_progress("UDP sent, retrying TCP...")
-                    time.sleep(0.5)
-                except Exception as e:
-                    self.log(f"UDP fallback error: {e}")
+                self._report_progress(f"Retrying... (attempt {attempt + 2}/{max_retries})")
+                time.sleep(0.5)
 
         self._report_progress("Connection failed")
         return False
@@ -539,77 +514,96 @@ class ISuperBike:
         self.log("=== Starting Initialization ===")
         self._report_progress("Sending init command...")
 
-        # Send init command
-        if not self.send("<EQ_>"):
-            return False
-
-        time.sleep(0.5)
-
-        # Receive loop with timeout
+        # Send EQ_ with retries - bike sometimes misses the first packet
+        EQ_MAX_RETRIES = 3
+        EQ_RETRY_INTERVAL = 1.0  # seconds between retries
         init_done = False
-        for i in range(15):  # 50 iterations = ~10 seconds
 
-            responses = self.receive(timeout=2.0)
-            if not responses:
-                self.log("Timeout waiting for responses...")
-                continue
+        for eq_attempt in range(EQ_MAX_RETRIES):
+            if eq_attempt > 0:
+                self.log(f"Retrying EQ_ (attempt {eq_attempt + 1}/{EQ_MAX_RETRIES})...")
+                self._report_progress(f"Retrying init... ({eq_attempt + 1}/{EQ_MAX_RETRIES})")
 
-            for response in responses:
-                result = self.parse_command(response)
+            if not self.send("<EQ_>"):
+                return False
 
-                # Protocol sequence:
-                # 1. <EQ> - init acknowledged (handled in parse_command)
-                # 2. <EP_SUPERWIGH> - password
-                if result == "password":
-                    # self.send("<EP_OK>") #No need to acknowledge password
-                    self._report_progress("Authenticated")
-                    time.sleep(0.1)
-                # 3. <ER_1-20> - resistance range (min-max)
-                elif result == "resistance":
-                    self.send("<ER_OK>")
-                    self._report_progress(
-                        f"Resistance: {self.resistance_min}-{self.resistance_max}")
-                    time.sleep(0.5)
-                # 4. <EA_...> - MAC address (according to protocol)
-                elif result == "mac":
-                    self.send("<EA_OK>")
-                    self._report_progress(f"MAC: {self.mac_address}")
-                    time.sleep(0.1)
-                # 5. <ED_2100> - wheel diameter ×100 (21.00")
-                elif result == "diameter":
-                    self.send("<ED_OK>")
-                    self._report_progress(f"Wheel: {self.wheel_diameter}\"")
-                    time.sleep(0.1)
-                # 6. <EM> - memory data
-                elif result == "memory":
-                    self.send("<EM_OK>")
-                    self._report_progress("Memory data received")
-                    time.sleep(0.1)
-                #  <ET_Upright> or <EV> - equipment vendor info
-                elif result == "ev_data":
-                    self.send("<EV_OK>")
-                    self._report_progress("Vendor info received")
-                    time.sleep(0.1)
-                #  <ET_Upright> - equipment type
-                elif result == "et_data":
-                    self.send("<ET_OK>")
-                    self._report_progress("Equipment type received")
-                    time.sleep(0.1)
-                elif result == "unit":
-                    self.send("<EU_OK>")
-                    self._report_progress("Unit received")
-                    time.sleep(0.1)
-                # 7. <Ez> - end of init phase
-                elif result == "init_complete":
-                    self.send("<Ez_OK>")
-                    self._report_progress("Init handshake complete")
-                    time.sleep(0.1)
-                    # self.send("<CP_300>")  # Pause after init
+            # Give the bike time to respond before starting the receive loop
+            time.sleep(0.5)
 
-                    init_done = True
-                    self.log("Init complete")
+            # Receive loop - process responses for up to 15 iterations
+            got_response = False
+            for i in range(15):
+                responses = self.receive(timeout=2.0)
+                if not responses:
+                    self.log("Timeout waiting for responses...")
+                    continue
+
+                got_response = True
+                for response in responses:
+                    result = self.parse_command(response)
+
+                    # Protocol sequence:
+                    # 1. <EQ> - init acknowledged (handled in parse_command)
+                    # 2. <EP_SUPERWIGH> - password
+                    if result == "password":
+                        # self.send("<EP_OK>") #No need to acknowledge password
+                        self._report_progress("Authenticated")
+                        time.sleep(0.1)
+                    # 3. <ER_1-20> - resistance range (min-max)
+                    elif result == "resistance":
+                        self.send("<ER_OK>")
+                        self._report_progress(
+                            f"Resistance: {self.resistance_min}-{self.resistance_max}")
+                        time.sleep(0.5)
+                    # 4. <EA_...> - MAC address (according to protocol)
+                    elif result == "mac":
+                        self.send("<EA_OK>")
+                        self._report_progress(f"MAC: {self.mac_address}")
+                        time.sleep(0.1)
+                    # 5. <ED_2100> - wheel diameter ×100 (21.00")
+                    elif result == "diameter":
+                        self.send("<ED_OK>")
+                        self._report_progress(f"Wheel: {self.wheel_diameter}\"")
+                        time.sleep(0.1)
+                    # 6. <EM> - memory data
+                    elif result == "memory":
+                        self.send("<EM_OK>")
+                        self._report_progress("Memory data received")
+                        time.sleep(0.1)
+                    #  <ET_Upright> or <EV> - equipment vendor info
+                    elif result == "ev_data":
+                        self.send("<EV_OK>")
+                        self._report_progress("Vendor info received")
+                        time.sleep(0.1)
+                    #  <ET_Upright> - equipment type
+                    elif result == "et_data":
+                        self.send("<ET_OK>")
+                        self._report_progress("Equipment type received")
+                        time.sleep(0.1)
+                    elif result == "unit":
+                        self.send("<EU_OK>")
+                        self._report_progress("Unit received")
+                        time.sleep(0.1)
+                    # 7. <Ez> - end of init phase
+                    elif result == "init_complete":
+                        self.send("<Ez_OK>")
+                        self._report_progress("Init handshake complete")
+                        time.sleep(0.1)
+                        # self.send("<CP_300>")  # Pause after init
+
+                        init_done = True
+                        self.log("Init complete")
+
+                if init_done:
+                    break
+
             if init_done:
                 break
+
+            # No response at all from EQ_ - retry
+            if not got_response:
+                self.log(f"No response to EQ_, will retry...")
+                continue
 
         if init_done:
             self.initialized = True
