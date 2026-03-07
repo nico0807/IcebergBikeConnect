@@ -186,6 +186,64 @@ class Dashboard:
         # Input timeout
         self.stdscr.timeout(100)
 
+        # Connection progress state
+        self._progress_events = []   # list of message strings received so far
+        self._progress_max = 8       # expected number of init events
+
+    def draw_connection_progress(self):
+        """Draw a centered connection progress screen with animated bar and last step text"""
+        height, width = self.stdscr.getmaxyx()
+        box_w = min(60, width - 4)
+        box_h = 7
+        box_y = height // 2 - box_h // 2
+        box_x = (width - box_w) // 2
+
+        self.stdscr.clear()
+
+        # Title
+        title = " Connecting to Bike "
+        try:
+            self.stdscr.addstr(
+                box_y, box_x + (box_w - len(title)) // 2,
+                title, curses.color_pair(1) | curses.A_BOLD)
+        except Exception:
+            pass
+
+        # Last step message
+        last_msg = self._progress_events[-1] if self._progress_events else "Please wait..."
+        msg_y = box_y + 2
+        msg_text = last_msg[:box_w - 4]
+        msg_x = box_x + (box_w - len(msg_text)) // 2
+        try:
+            self.stdscr.addstr(msg_y, msg_x, msg_text, curses.color_pair(6))
+        except Exception:
+            pass
+
+        # Progress bar
+        bar_y = box_y + 4
+        bar_w = box_w - 4
+        bar_x = box_x + 2
+        n = len(self._progress_events)
+        filled = min(bar_w, int(bar_w * n / self._progress_max))
+        bar_str = "#" * filled + "-" * (bar_w - filled)
+        try:
+            self.stdscr.addstr(bar_y, bar_x, "[", curses.color_pair(6))
+            self.stdscr.addstr(bar_y, bar_x + 1, bar_str[:filled], curses.color_pair(2) | curses.A_BOLD)
+            self.stdscr.addstr(bar_y, bar_x + 1 + filled, bar_str[filled:], curses.color_pair(6))
+            self.stdscr.addstr(bar_y, bar_x + 1 + bar_w, "]", curses.color_pair(6))
+        except Exception:
+            pass
+
+        # Step counter
+        counter = f"{n}/{self._progress_max} steps"
+        try:
+            self.stdscr.addstr(bar_y + 1, box_x + (box_w - len(counter)) // 2,
+                               counter, curses.color_pair(3))
+        except Exception:
+            pass
+
+        self.stdscr.refresh()
+
     def draw_box(self, y, x, height, width, title=""):
         """Draw a box using borders"""
         # Top and bottom borders
@@ -738,10 +796,6 @@ class Dashboard:
             print("Wake lock disabled (--no-wake-lock flag)")
 
         # Program selection
-        self.stdscr.clear()
-        self.stdscr.addstr(0, 2, "Connecting to bike...", curses.color_pair(6))
-        self.stdscr.refresh()
-
         program = self.draw_program_selection()
 
         if program:
@@ -756,15 +810,23 @@ class Dashboard:
             # Reset cursor
             curses.curs_set(0)
 
-        # Connect and initialize
-        self.stdscr.clear()
-        self.stdscr.addstr(0, 2, "Connecting to bike...", curses.color_pair(6))
-        self.stdscr.refresh()
+        # Wire progress callback so connect/initialize updates the progress screen
+        def on_progress(message):
+            self._progress_events.append(message)
+            self.draw_connection_progress()
+
+        self.bike.progress_callback = on_progress
+
+        # Show initial progress screen
+        self.draw_connection_progress()
 
         if self.bike.connect():
             time.sleep(0.5)
             if self.bike.initialize():
                 time.sleep(0.5)
+                self._progress_events.append("Ready!")
+                self.draw_connection_progress()
+                time.sleep(0.4)
                 self.bike.start_sport()
 
                 # Start program if selected

@@ -37,12 +37,11 @@ python dashboard.py --list-ips
 # Connect to your bike (adjust IP as needed)
 python dashboard.py --ip 169.254.1.1
 
-# Enable debug logging for troubleshooting
-python dashboard.py --ip 169.254.1.1 --debug
-
 # Disable screen wake lock (allow screen to turn off)
 python dashboard.py --ip 169.254.1.1 --no-wake-lock
 ```
+
+> **Debug logging** is always enabled automatically. Each session creates a timestamped log file in `debug_logs/` — no flag needed.
 
 ## Usage
 
@@ -69,7 +68,8 @@ python dashboard.py --ip 169.254.1.1 --no-wake-lock
 | `X` | Clear all data (reset distance) |
 | `A` | Toggle auto-update mode |
 | `P` | Select new workout program |
-| `R` | Reconnect to bike |
+| `C` | Connect to bike (when disconnected) |
+| `R` | Force reconnect to bike |
 | `Q` | Quit dashboard |
 
 **Screen Wake Lock**: The dashboard automatically prevents your screen from turning off during workouts. This is enabled by default. Use `--no-wake-lock` to disable this feature if you prefer normal screen behavior.
@@ -81,6 +81,7 @@ The dashboard includes pre-configured workout programs for different training go
 - **Warmup** - Gradual warm-up progression
 - **Intervals** - High-intensity interval training
 - **Long Interval** - Extended interval sessions
+- **Izi Long Interval** - Easier variation of the long interval session
 - **Endurance** - Steady-state endurance rides
 - **Pyramid** - Progressive intensity pyramid
 
@@ -113,8 +114,8 @@ The project implements the iSuper bike's proprietary ASCII-based protocol over T
 
 - **Connection**: TCP socket to bike on port 1971
 - **Authentication**: Hardcoded password `"SUPERWIGH"`
-- **Polling**: Data requests every 200ms via `<WB_6>`
-- **Sport Data**: `<W6_SYNC,DISTANCE,RPM,PULSE,LEVEL,CALORIES,POWER,UNKNOWN>`
+- **Sport Data**: Bike pushes `<W6_SYNC,DISTANCE,RPM,PULSE,LEVEL,CALORIES,POWER,UNKNOWN>` automatically after sport mode is started — no polling required
+- **UDP Fallback**: If TCP connection fails, the client broadcasts the bike password via UDP to unlock the port, then retries the TCP connection
 
 ### Core Components
 
