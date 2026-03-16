@@ -358,6 +358,14 @@ class ISuperBike:
             if len(data_parts) >= 5:
                 try:
                     self.level = int(data_parts[4].ljust(2, '0'))
+                    # Firmware bug: if bike reports level 1 (CR_00 territory),
+                    # immediately push CR_01 to escape it. Power and calories
+                    # are corrupted (~10x) at level 1 and the bike won't ACK
+                    # CR_00, so we never intentionally go there — but the bike
+                    # can still end up there on its own (e.g. after power-on).
+                    if self.level == 1:
+                        self.log("⚠ Bike reported level 1 (firmware bug) — forcing CR_01")
+                        self.send("<CR_01>")
                 except:
                     pass
 
@@ -631,14 +639,23 @@ class ISuperBike:
         self.log("Sport paused")
 
     def set_level(self, level, min, max):
-        """Set resistance level (0-99)"""
+        """Set resistance level (0-99).
+
+        NOTE - Bike firmware bug with CR_00 (Level 1):
+          - The bike does not acknowledge CR_00 commands.
+          - When the bike-side level is 1, it reports ~10x the correct power
+            and accumulates calories proportionally, corrupting workout data.
+          - To avoid this, CR_00 is skipped entirely: the effective minimum
+            sent to the bike is CR_01 (which the bike treats as Level 2).
+          - This means UI Level 1 and Level 2 both map to CR_01 on the wire.
+        """
         if level < min:
             level = min
         if level > max:
             level = max
-        level -= 1  # CR_00 => Level 1
-        if level < 0:
-            level = 0
+        level -= 1  # CR_00 => Level 1 (zero-indexed on the wire)
+        if level < 1:  # Skip CR_00: firmware bug causes ~10x power and no ACK
+            level = 1
         cmd = f"<CR_{level:02d}>"
         self.send(cmd)
         self.log(f"Level set to {level}")
