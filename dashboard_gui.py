@@ -182,6 +182,11 @@ class BikeWorker:
         self.last_log_time = 0.0
         self.paused = False
         self.active_program: SportProgram | None = None
+        # Waiting-for-pedal state
+        self._pending_program: SportProgram | None = None
+        self._pending_program_name: str = ''
+        self.waiting_for_pedal: bool = False
+        self._pedal_since: float = 0.0  # time when continuous pedalling started
 
     # ------------------------------------------------------------------
     # Public interface (called from GUI thread — thread-safe)
@@ -216,6 +221,16 @@ class BikeWorker:
         t = threading.Thread(target=self._do_reconnect, daemon=True)
         t.start()
 
+    def queue_program(self, program: SportProgram, duration_minutes: int,
+                      program_name: str):
+        """Enter 'waiting for pedal' state; program starts after 3 s of pedalling."""
+        program.duration_minutes = duration_minutes
+        program.calculate_segment_duration()
+        self._pending_program = program
+        self._pending_program_name = program_name
+        self.waiting_for_pedal = True
+        self._pedal_since = 0.0
+
     def start_program(self, program: SportProgram, duration_minutes: int,
                       program_name: str):
         self.active_program = program
@@ -224,6 +239,12 @@ class BikeWorker:
         self.active_program.start()
         self.bike.stop_logging()
         self.bike.start_logging(program_name)
+
+    def cancel_waiting(self):
+        self._pending_program = None
+        self._pending_program_name = ''
+        self.waiting_for_pedal = False
+        self._pedal_since = 0.0
 
     def clear_program(self):
         self.active_program = None
@@ -286,6 +307,8 @@ class BikeWorker:
         self._busy = False
         self._poll_loop()
 
+    PEDAL_REQUIRED_SECONDS = 3  # seconds of continuous pedalling to start program
+
     def _poll_loop(self):
         last_level_check = 0.0
         while not self._stop_event.is_set():
@@ -302,6 +325,36 @@ class BikeWorker:
             if self.workout_start and now - self.last_log_time >= 1.0:
                 self.bike.log_data()
                 self.last_log_time = now
+
+            # Waiting-for-pedal: check RPM and count continuous pedalling time
+            if self.waiting_for_pedal and self._pending_program is not None:
+                rpm = self.bike.rpm
+                if rpm and rpm > 0:
+                    if self._pedal_since == 0.0:
+                        self._pedal_since = now
+                    elapsed_pedalling = now - self._pedal_since
+                    pedal_progress = min(elapsed_pedalling / self.PEDAL_REQUIRED_SECONDS, 1.0)
+                    self._post({'type': 'pedal_wait',
+                                'progress': pedal_progress,
+                                'remaining': max(0.0, self.PEDAL_REQUIRED_SECONDS - elapsed_pedalling)})
+                    if elapsed_pedalling >= self.PEDAL_REQUIRED_SECONDS:
+                        # Start the program now
+                        self.waiting_for_pedal = False
+                        prog = self._pending_program
+                        name = self._pending_program_name
+                        self._pending_program = None
+                        self._pending_program_name = ''
+                        self._pedal_since = 0.0
+                        self.active_program = prog
+                        self.active_program.start()
+                        self.bike.stop_logging()
+                        self.bike.start_logging(name)
+                        self._post({'type': 'program_started'})
+                else:
+                    # Reset counter if pedalling stopped
+                    self._pedal_since = 0.0
+                    self._post({'type': 'pedal_wait', 'progress': 0.0,
+                                'remaining': float(self.PEDAL_REQUIRED_SECONDS)})
 
             # Program level updates
             if self.active_program and not self.paused:
@@ -492,6 +545,8 @@ class GUIDashboard:
         self._last_status: dict | None = None
         self._connected = False
         self._progress_value = 0.0
+        self._pedal_wait_progress: float = 0.0
+        self._pedal_wait_remaining: float = float(BikeWorker.PEDAL_REQUIRED_SECONDS)
 
     # ------------------------------------------------------------------
     # Entry point
@@ -599,6 +654,12 @@ class GUIDashboard:
         with dpg.theme(tag="bar_normal_theme"):
             with dpg.theme_component(dpg.mvProgressBar):
                 dpg.add_theme_color(dpg.mvThemeCol_PlotHistogram, (0, 160, 200, 255),
+                                    category=dpg.mvThemeCat_Core)
+
+        # Orange progress bar theme (waiting for pedal)
+        with dpg.theme(tag="bar_pedal_theme"):
+            with dpg.theme_component(dpg.mvProgressBar):
+                dpg.add_theme_color(dpg.mvThemeCol_PlotHistogram, (220, 110, 0, 255),
                                     category=dpg.mvThemeCat_Core)
 
     # ------------------------------------------------------------------
@@ -880,6 +941,16 @@ class GUIDashboard:
             dpg.set_value(TAG_PROGRESS_TEXT, f"Error: {msg['message']}")
             dpg.configure_item(TAG_PROGRESS_MODAL, show=True)
 
+        elif mtype == 'pedal_wait':
+            self._pedal_wait_progress = msg['progress']
+            self._pedal_wait_remaining = msg['remaining']
+            self._update_program_bar()
+
+        elif mtype == 'program_started':
+            self._pedal_wait_progress = 0.0
+            self._pedal_wait_remaining = 0.0
+            self._update_program_bar()
+
         elif mtype == 'status':
             self._last_status = msg['data']
             elapsed = msg['elapsed']
@@ -915,8 +986,24 @@ class GUIDashboard:
             dpg.configure_item(tag, color=color)
 
     def _update_program_bar(self):
+        if not dpg.does_item_exist(TAG_PROGRAM_BAR_GROUP):
+            return
+
+        # Waiting-for-pedal state: show orange bar with countdown
+        if self.worker.waiting_for_pedal and self.worker._pending_program is not None:
+            dpg.configure_item(TAG_PROGRAM_BAR_GROUP, show=True)
+            remaining = self._pedal_wait_remaining
+            dpg.set_value(TAG_PROGRAM_BAR, self._pedal_wait_progress)
+            dpg.configure_item(TAG_PROGRAM_BAR,
+                               overlay=f"Waiting for pedal...  {remaining:.1f}s")
+            dpg.set_value(TAG_PROGRAM_TEXT, "Start pedalling to begin the program")
+            dpg.configure_item(TAG_PROGRAM_TEXT, color=(220, 110, 0, 255))
+            if dpg.does_item_exist("bar_pedal_theme"):
+                dpg.bind_item_theme(TAG_PROGRAM_BAR, "bar_pedal_theme")
+            return
+
         prog = self.worker.active_program
-        if not prog or not dpg.does_item_exist(TAG_PROGRAM_BAR_GROUP):
+        if not prog:
             return
         dpg.configure_item(TAG_PROGRAM_BAR_GROUP, show=True)
         progress, remaining, seg = prog.get_progress()
@@ -984,10 +1071,13 @@ class GUIDashboard:
         program = next((p for p in programs if p.name ==
                        selected_name), programs[0])
         duration = dpg.get_value(TAG_PROG_DURATION)
-        self.worker.start_program(
+        self.worker.queue_program(
             program, duration, program.name.replace(' ', '_').lower())
+        self._pedal_wait_progress = 0.0
+        self._pedal_wait_remaining = float(BikeWorker.PEDAL_REQUIRED_SECONDS)
         if dpg.does_item_exist(TAG_PROGRAM_BAR_GROUP):
             dpg.configure_item(TAG_PROGRAM_BAR_GROUP, show=True)
+        self._update_program_bar()
         dpg.configure_item(TAG_PROG_MODAL, show=False)
 
     def _on_quit(self):
