@@ -20,68 +20,68 @@ from sport_program_parser import SportProgramParser, SportProgram
 # ---------------------------------------------------------------------------
 # DPG item tag constants
 # ---------------------------------------------------------------------------
-TAG_MAIN_WINDOW      = "main_window"
-TAG_CONTENT_GROUP    = "content_group"
-TAG_PROGRESS_MODAL   = "progress_modal"
-TAG_PROGRESS_BAR     = "progress_bar"
-TAG_PROGRESS_TEXT    = "progress_text"
-TAG_STATUS_TEXT      = "status_text"
-TAG_DEVICE_INFO      = "device_info"
+TAG_MAIN_WINDOW = "main_window"
+TAG_CONTENT_GROUP = "content_group"
+TAG_PROGRESS_MODAL = "progress_modal"
+TAG_PROGRESS_BAR = "progress_bar"
+TAG_PROGRESS_TEXT = "progress_text"
+TAG_STATUS_TEXT = "status_text"
+TAG_DEVICE_INFO = "device_info"
 
-TAG_TILE_SPEED       = "tile_speed"
-TAG_TILE_RPM         = "tile_rpm"
-TAG_TILE_HR          = "tile_hr"
-TAG_TILE_LEVEL       = "tile_level"
-TAG_TILE_DISTANCE    = "tile_distance"
-TAG_TILE_CALORIES    = "tile_calories"
-TAG_TILE_WATTS       = "tile_watts"
+TAG_TILE_SPEED = "tile_speed"
+TAG_TILE_RPM = "tile_rpm"
+TAG_TILE_HR = "tile_hr"
+TAG_TILE_LEVEL = "tile_level"
+TAG_TILE_DISTANCE = "tile_distance"
+TAG_TILE_CALORIES = "tile_calories"
+TAG_TILE_WATTS = "tile_watts"
 
-TAG_GRAPH1_PLOT      = "graph1_plot"
-TAG_GRAPH1_SERIES    = "graph1_series"
-TAG_GRAPH1_XAXIS     = "graph1_xaxis"
-TAG_GRAPH1_YAXIS     = "graph1_yaxis"
-TAG_GRAPH1_COMBO     = "graph1_combo"
-TAG_GRAPH2_PLOT      = "graph2_plot"
-TAG_GRAPH2_SERIES    = "graph2_series"
-TAG_GRAPH2_XAXIS     = "graph2_xaxis"
-TAG_GRAPH2_YAXIS     = "graph2_yaxis"
-TAG_GRAPH2_COMBO     = "graph2_combo"
+TAG_GRAPH1_PLOT = "graph1_plot"
+TAG_GRAPH1_SERIES = "graph1_series"
+TAG_GRAPH1_XAXIS = "graph1_xaxis"
+TAG_GRAPH1_YAXIS = "graph1_yaxis"
+TAG_GRAPH1_COMBO = "graph1_combo"
+TAG_GRAPH2_PLOT = "graph2_plot"
+TAG_GRAPH2_SERIES = "graph2_series"
+TAG_GRAPH2_XAXIS = "graph2_xaxis"
+TAG_GRAPH2_YAXIS = "graph2_yaxis"
+TAG_GRAPH2_COMBO = "graph2_combo"
 
 TAG_PROGRAM_BAR_GROUP = "program_bar_group"
-TAG_PROGRAM_BAR       = "program_bar"
-TAG_PROGRAM_TEXT      = "program_text"
+TAG_PROGRAM_BAR = "program_bar"
+TAG_PROGRAM_TEXT = "program_text"
 
-TAG_BTN_LEVEL_UP     = "btn_level_up"
-TAG_BTN_LEVEL_DOWN   = "btn_level_down"
-TAG_BTN_PAUSE        = "btn_pause"
-TAG_BTN_RESUME       = "btn_resume"
-TAG_BTN_RECONNECT    = "btn_reconnect"
-TAG_BTN_PROGRAM      = "btn_program"
-TAG_BTN_QUIT         = "btn_quit"
+TAG_BTN_LEVEL_UP = "btn_level_up"
+TAG_BTN_LEVEL_DOWN = "btn_level_down"
+TAG_BTN_PAUSE = "btn_pause"
+TAG_BTN_RESUME = "btn_resume"
+TAG_BTN_RECONNECT = "btn_reconnect"
+TAG_BTN_PROGRAM = "btn_program"
+TAG_BTN_QUIT = "btn_quit"
 
-TAG_PROG_MODAL       = "prog_select_modal"
-TAG_PROG_LISTBOX     = "prog_listbox"
-TAG_PROG_DURATION    = "prog_duration"
+TAG_PROG_MODAL = "prog_select_modal"
+TAG_PROG_LISTBOX = "prog_listbox"
+TAG_PROG_DURATION = "prog_duration"
 
 # Theme tags
-TAG_THEME_NORMAL     = "theme_normal"
-TAG_THEME_WARNING    = "theme_warning"
-TAG_THEME_ALERT      = "theme_alert"
-TAG_THEME_MAGENTA    = "theme_magenta"
-TAG_THEME_CYAN       = "theme_cyan"
+TAG_THEME_NORMAL = "theme_normal"
+TAG_THEME_WARNING = "theme_warning"
+TAG_THEME_ALERT = "theme_alert"
+TAG_THEME_MAGENTA = "theme_magenta"
+TAG_THEME_CYAN = "theme_cyan"
 
 # ---------------------------------------------------------------------------
 # Colours
 # ---------------------------------------------------------------------------
-COL_BG        = (12, 12, 12, 255)
-COL_PANEL     = (28, 28, 28, 255)
-COL_CYAN      = (0, 230, 255, 255)
-COL_WHITE     = (255, 255, 255, 255)
-COL_GREEN     = (60, 230, 60, 255)
-COL_YELLOW    = (255, 220, 0, 255)
-COL_RED       = (255, 60, 60, 255)
-COL_MAGENTA   = (210, 0, 240, 255)
-COL_GREY      = (160, 160, 160, 255)
+COL_BG = (12, 12, 12, 255)
+COL_PANEL = (28, 28, 28, 255)
+COL_CYAN = (0, 230, 255, 255)
+COL_WHITE = (255, 255, 255, 255)
+COL_GREEN = (60, 230, 60, 255)
+COL_YELLOW = (255, 220, 0, 255)
+COL_RED = (255, 60, 60, 255)
+COL_MAGENTA = (210, 0, 240, 255)
+COL_GREY = (160, 160, 160, 255)
 
 METRIC_LABELS = {
     'speed':      'Speed (km/h)',
@@ -97,6 +97,8 @@ METRICS = list(METRIC_LABELS.keys())
 # ---------------------------------------------------------------------------
 # ScreenWakeKeeper  (unchanged from dashboard.py)
 # ---------------------------------------------------------------------------
+
+
 class ScreenWakeKeeper:
     def __init__(self):
         self.system = platform.system()
@@ -109,9 +111,9 @@ class ScreenWakeKeeper:
             if self.system == "Windows":
                 import ctypes
                 from threading import Thread, Event
-                ES_CONTINUOUS       = 0x80000000
+                ES_CONTINUOUS = 0x80000000
                 ES_DISPLAY_REQUIRED = 0x00000002
-                ES_SYSTEM_REQUIRED  = 0x00000001
+                ES_SYSTEM_REQUIRED = 0x00000001
                 self.wake_stop_event = Event()
 
                 def keep_awake():
@@ -128,8 +130,10 @@ class ScreenWakeKeeper:
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             elif self.system == "Linux":
                 try:
-                    subprocess.run(['xset', 's', 'off'], capture_output=True, check=True)
-                    subprocess.run(['xset', 's', 'noblank'], capture_output=True, check=True)
+                    subprocess.run(['xset', 's', 'off'],
+                                   capture_output=True, check=True)
+                    subprocess.run(['xset', 's', 'noblank'],
+                                   capture_output=True, check=True)
                 except (subprocess.CalledProcessError, FileNotFoundError):
                     self.wake_process = subprocess.Popen(
                         ['systemd-inhibit', '--what=sleep',
@@ -195,7 +199,8 @@ class BikeWorker:
         self.bike.disconnect()
 
     def set_level(self, level):
-        self.bike.set_level(level, self.bike.resistance_min, self.bike.resistance_max)
+        self.bike.set_level(level, self.bike.resistance_min,
+                            self.bike.resistance_max)
 
     def pause(self):
         self.bike.pause_sport()
@@ -212,7 +217,7 @@ class BikeWorker:
         t.start()
 
     def start_program(self, program: SportProgram, duration_minutes: int,
-                       program_name: str):
+                      program_name: str):
         self.active_program = program
         self.active_program.duration_minutes = duration_minutes
         self.active_program.calculate_segment_duration()
@@ -231,9 +236,11 @@ class BikeWorker:
 
     def _run(self):
         self._busy = True
-        self._post({'type': 'progress', 'message': f'Connecting to {self.ip}...'})
+        self._post(
+            {'type': 'progress', 'message': f'Connecting to {self.ip}...'})
 
-        self.bike.progress_callback = lambda m: self._post({'type': 'progress', 'message': m})
+        self.bike.progress_callback = lambda m: self._post(
+            {'type': 'progress', 'message': m})
 
         if not self.bike.connect():
             self._post({'type': 'error', 'message': 'Connection failed'})
@@ -311,7 +318,7 @@ class BikeWorker:
             # Post status snapshot
             status = self.bike.get_status()
             elapsed = (datetime.now() - self.workout_start).total_seconds() \
-                      if self.workout_start else 0.0
+                if self.workout_start else 0.0
             self._post({'type': 'status', 'data': status, 'elapsed': elapsed})
 
             time.sleep(self.POLL_INTERVAL)
@@ -332,11 +339,11 @@ class GraphPanel:
         self._deque: deque = deque(maxlen=self.MAX_POINTS)
 
         prefix = f"graph{index}"
-        self.tag_plot   = f"{prefix}_plot"
+        self.tag_plot = f"{prefix}_plot"
         self.tag_series = f"{prefix}_series"
-        self.tag_xaxis  = f"{prefix}_xaxis"
-        self.tag_yaxis  = f"{prefix}_yaxis"
-        self.tag_combo  = f"{prefix}_combo"
+        self.tag_xaxis = f"{prefix}_xaxis"
+        self.tag_yaxis = f"{prefix}_yaxis"
+        self.tag_combo = f"{prefix}_combo"
 
     def build_ui(self, parent, width: int = -1, height: int = 300):
         w = width if width > 0 else -1
@@ -367,7 +374,8 @@ class GraphPanel:
         self._deque.clear()
         dpg.set_value(self.tag_series, [[], []])
         dpg.set_item_label(self.tag_yaxis, METRIC_LABELS[self.selected_metric])
-        dpg.set_item_label(self.tag_series, METRIC_LABELS[self.selected_metric])
+        dpg.set_item_label(
+            self.tag_series, METRIC_LABELS[self.selected_metric])
 
     def push(self, status: dict, elapsed: float):
         value = float(status.get(self.selected_metric, 0))
@@ -380,12 +388,24 @@ class GraphPanel:
         xs = [t for t, v in visible]
         ys = [v for t, v in visible]
         dpg.set_value(self.tag_series, [xs, ys])
-        dpg.set_axis_limits(self.tag_xaxis, elapsed - self.HISTORY_SECONDS, elapsed)
+        dpg.set_axis_limits(self.tag_xaxis, elapsed -
+                            self.HISTORY_SECONDS, elapsed)
         dpg.fit_axis_data(self.tag_yaxis)
 
     def update_size(self, width: int, height: int):
         dpg.configure_item(self.tag_plot, width=width, height=height)
         dpg.configure_item(self.tag_combo, width=width)
+
+# ---------------------------------------------------------------------------
+# Time Helpers
+# ---------------------------------------------------------------------------
+
+
+def fmt_duration(seconds):
+    """Format seconds as m:ss."""
+    m = int(seconds) // 60
+    s = int(seconds) % 60
+    return f"{m}:{s:02d}"
 
 
 # ---------------------------------------------------------------------------
@@ -393,13 +413,17 @@ class GraphPanel:
 # ---------------------------------------------------------------------------
 TILE_DEFS = [
     ('speed',      'Speed',      'km/h',  COL_GREEN,   [(None, None)]),
-    ('rpm',        'RPM',        'rpm',   COL_GREEN,   [(100, COL_YELLOW), (120, COL_RED)]),
-    ('heart_rate', 'Heart Rate', 'bpm',   COL_GREEN,   [(120, COL_YELLOW), (150, COL_RED)]),
+    ('rpm',        'RPM',        'rpm',   COL_GREEN,
+     [(100, COL_YELLOW), (120, COL_RED)]),
+    ('heart_rate', 'Heart Rate', 'bpm',   COL_GREEN,
+     [(120, COL_YELLOW), (150, COL_RED)]),
     ('level',      'Level',      '',      COL_MAGENTA, [(None, None)]),
     ('distance',   'Distance',   'km',    COL_CYAN,    [(None, None)]),
     ('calories',   'Calories',   'kcal',  COL_MAGENTA, [(None, None)]),
-    ('watts',      'Watts',      'W',     COL_GREEN,   [(150, COL_YELLOW), (200, COL_RED)]),
+    ('watts',      'Watts',      'W',     COL_GREEN,
+     [(150, COL_YELLOW), (200, COL_RED)]),
 ]
+
 
 def _tile_color(value: float, thresholds) -> tuple:
     """Return the appropriate colour for a value given threshold list."""
@@ -415,7 +439,7 @@ def _build_tile(parent, key: str, label: str, unit: str):
     """Build a single metric tile child_window. Returns (value_tag, unit_tag)."""
     value_tag = f"tile_{key}_val"
     with dpg.child_window(parent=parent, border=True,
-                           height=80, tag=f"tile_{key}_win"):
+                          height=80, tag=f"tile_{key}_win"):
         dpg.add_text(label, color=COL_GREY)
         dpg.add_text("---", tag=value_tag, color=COL_GREEN)
         if unit:
@@ -454,7 +478,7 @@ class GUIDashboard:
         self._queue: queue.Queue = queue.Queue()
         self.worker = BikeWorker(ip, self._queue)
 
-        self.graph1 = GraphPanel(1, 'speed')
+        self.graph1 = GraphPanel(1, default_metric='heart_rate')
         self.graph2 = GraphPanel(2, 'rpm')
 
         self.wake_keeper = ScreenWakeKeeper()
@@ -543,12 +567,17 @@ class GUIDashboard:
             with dpg.theme_component(dpg.mvAll):
                 dpg.add_theme_color(dpg.mvThemeCol_WindowBg,     COL_BG)
                 dpg.add_theme_color(dpg.mvThemeCol_ChildBg,      COL_PANEL)
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBg,      (45, 45, 45, 255))
-                dpg.add_theme_color(dpg.mvThemeCol_Button,       (55, 55, 55, 255))
-                dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered,(85, 85, 85, 255))
-                dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (110, 110, 110, 255))
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBg,
+                                    (45, 45, 45, 255))
+                dpg.add_theme_color(dpg.mvThemeCol_Button,
+                                    (55, 55, 55, 255))
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_ButtonHovered, (85, 85, 85, 255))
+                dpg.add_theme_color(
+                    dpg.mvThemeCol_ButtonActive, (110, 110, 110, 255))
                 dpg.add_theme_color(dpg.mvThemeCol_Text,         COL_WHITE)
-                dpg.add_theme_color(dpg.mvThemeCol_Border,       (80, 80, 80, 255))
+                dpg.add_theme_color(dpg.mvThemeCol_Border,
+                                    (80, 80, 80, 255))
                 dpg.add_theme_style(dpg.mvStyleVar_WindowRounding,  0)
                 dpg.add_theme_style(dpg.mvStyleVar_FrameRounding,   2)
                 dpg.add_theme_style(dpg.mvStyleVar_ItemSpacing,     6, 4)
@@ -582,8 +611,10 @@ class GUIDashboard:
                         width=400, height=130,
                         no_resize=True, no_move=True,
                         pos=[440, 335]):
-            dpg.add_text("Please wait...", tag=TAG_PROGRESS_TEXT, color=COL_WHITE)
-            dpg.add_progress_bar(tag=TAG_PROGRESS_BAR, default_value=0.0, width=-1)
+            dpg.add_text("Please wait...",
+                         tag=TAG_PROGRESS_TEXT, color=COL_WHITE)
+            dpg.add_progress_bar(tag=TAG_PROGRESS_BAR,
+                                 default_value=0.0, width=-1)
 
         # Main window
         with dpg.window(tag=TAG_MAIN_WINDOW, label="iSuper Bike Dashboard",
@@ -591,9 +622,11 @@ class GUIDashboard:
                         no_scrollbar=True):
             # Fixed header
             with dpg.group(horizontal=True):
-                dpg.add_text("  iSuper Bike Dashboard", tag="header_title", color=COL_CYAN)
+                dpg.add_text("  iSuper Bike Dashboard",
+                             tag="header_title", color=COL_CYAN)
                 dpg.add_spacer(width=20)
-                dpg.add_text("○ DISCONNECTED", tag=TAG_STATUS_TEXT, color=COL_RED)
+                dpg.add_text("○ DISCONNECTED",
+                             tag=TAG_STATUS_TEXT, color=COL_RED)
             dpg.add_separator()
 
             # Content group — rebuilt on layout switch
@@ -618,7 +651,8 @@ class GUIDashboard:
         with dpg.group(horizontal=True, parent=TAG_CONTENT_GROUP):
             # Left column
             with dpg.group():
-                self._build_tile_grid(columns=4, tile_width=160, tile_height=110)
+                self._build_tile_grid(
+                    columns=4, tile_width=160, tile_height=110)
                 dpg.add_spacer(height=4)
                 self._build_program_bar()
                 dpg.add_spacer(height=4)
@@ -653,8 +687,8 @@ class GUIDashboard:
                 row_group = dpg.add_group(horizontal=True,
                                           parent=TAG_CONTENT_GROUP)
             with dpg.child_window(parent=row_group, border=True,
-                                   width=tile_width, height=tile_height,
-                                   tag=f"tile_{key}_win"):
+                                  width=tile_width, height=tile_height,
+                                  tag=f"tile_{key}_win"):
                 if self.font_medium:
                     dpg.add_text(f"{label}", color=COL_GREY)
                     dpg.bind_item_font(dpg.last_item(), self.font_medium)
@@ -672,7 +706,7 @@ class GUIDashboard:
     def _build_program_bar(self):
         with dpg.group(tag=TAG_PROGRAM_BAR_GROUP, parent=TAG_CONTENT_GROUP, show=False):
             dpg.add_progress_bar(tag=TAG_PROGRAM_BAR, default_value=0.0, width=-1,
-                                  height=28, overlay="No program")
+                                 height=28, overlay="No program")
             dpg.add_text("", tag=TAG_PROGRAM_TEXT, color=COL_CYAN)
             if self.font_program:
                 dpg.bind_item_font(TAG_PROGRAM_TEXT, self.font_program)
@@ -733,7 +767,8 @@ class GUIDashboard:
 
     def _build_program_modal(self):
         programs = self.program_parser.list_programs()
-        names = [p.name for p in programs] if programs else ["(no programs found)"]
+        names = [p.name for p in programs] if programs else [
+            "(no programs found)"]
         with dpg.window(tag=TAG_PROG_MODAL, label="Select Program",
                         modal=True, show=False,
                         width=360, height=240,
@@ -831,9 +866,9 @@ class GUIDashboard:
             self._set_buttons_enabled(True)
             status = self.worker.bike.get_status()
             dpg.set_value(TAG_DEVICE_INFO,
-                f"  IP: {self.ip}  |  MAC: {status['mac_address'] or 'N/A'}"
-                f"  |  Wheel: {status['wheel_diameter']:.2f}\"  "
-                f"|  Resistance: {status['resistance_min']}-{status['resistance_max']}")
+                          f"  IP: {self.ip}  |  MAC: {status['mac_address'] or 'N/A'}"
+                          f"  |  Wheel: {status['wheel_diameter']:.2f}\"  "
+                          f"|  Resistance: {status['resistance_min']}-{status['resistance_max']}")
 
         elif mtype == 'disconnected':
             self._connected = False
@@ -855,11 +890,11 @@ class GUIDashboard:
             # Update message counts
             s = self._last_status
             dpg.set_value(TAG_DEVICE_INFO,
-                f"  IP: {self.ip}  |  MAC: {s['mac_address'] or 'N/A'}"
-                f"  |  Wheel: {s['wheel_diameter']:.2f}\"  "
-                f"|  Resistance: {s['resistance_min']}-{s['resistance_max']}"
-                f"  |  Sent: {s['messages_sent']}  Recv: {s['messages_received']}"
-                f"  |  {s['last_update'].strftime('%H:%M:%S') if s['last_update'] else '--:--:--'}")
+                          f"  IP: {self.ip}  |  MAC: {s['mac_address'] or 'N/A'}"
+                          f"  |  Wheel: {s['wheel_diameter']:.2f}\"  "
+                          f"|  Resistance: {s['resistance_min']}-{s['resistance_max']}"
+                          f"  |  Sent: {s['messages_sent']}  Recv: {s['messages_received']}"
+                          f"  |  {s['last_update'].strftime('%H:%M:%S') if s['last_update'] else '--:--:--'}")
 
     def _update_tiles(self, status: dict):
         for key, label, unit, default_color, thresholds in TILE_DEFS:
@@ -888,7 +923,7 @@ class GUIDashboard:
         current_level, seg_remaining, _ = prog.get_current_segment_info()
         dpg.set_value(TAG_PROGRAM_BAR, progress / 100.0)
         dpg.configure_item(TAG_PROGRAM_BAR,
-            overlay=f"{prog.name}  {progress:.0f}%  Seg {seg}/{prog.total_segments}  Next: {seg_remaining:.0f}s")
+                           overlay=f"{prog.name}  {progress:.0f}%  Seg {seg}/{prog.total_segments}  Next: {fmt_duration(seg_remaining)}")
         if prog.completed:
             dpg.set_value(TAG_PROGRAM_TEXT, "PROGRAM COMPLETE!")
             dpg.configure_item(TAG_PROGRAM_TEXT, color=COL_GREEN)
@@ -896,7 +931,7 @@ class GUIDashboard:
                 dpg.bind_item_theme(TAG_PROGRAM_BAR, "bar_complete_theme")
         else:
             status_text = (f"Level: {current_level if current_level else 'N/A'}"
-                           f"  |  {remaining:.0f}s remaining")
+                           f"  |  {fmt_duration(remaining)} remaining")
             dpg.set_value(TAG_PROGRAM_TEXT, status_text)
             dpg.configure_item(TAG_PROGRAM_TEXT, color=COL_CYAN)
             if dpg.does_item_exist("bar_normal_theme"):
@@ -908,7 +943,8 @@ class GUIDashboard:
             if dpg.does_item_exist(tag):
                 dpg.configure_item(tag, enabled=enabled)
         if dpg.does_item_exist(TAG_BTN_RECONNECT):
-            dpg.configure_item(TAG_BTN_RECONNECT, enabled=True)  # always available
+            # always available
+            dpg.configure_item(TAG_BTN_RECONNECT, enabled=True)
 
     # ------------------------------------------------------------------
     # Control callbacks
@@ -945,9 +981,11 @@ class GUIDashboard:
             dpg.configure_item(TAG_PROG_MODAL, show=False)
             return
         selected_name = dpg.get_value(TAG_PROG_LISTBOX)
-        program = next((p for p in programs if p.name == selected_name), programs[0])
+        program = next((p for p in programs if p.name ==
+                       selected_name), programs[0])
         duration = dpg.get_value(TAG_PROG_DURATION)
-        self.worker.start_program(program, duration, program.name.replace(' ', '_').lower())
+        self.worker.start_program(
+            program, duration, program.name.replace(' ', '_').lower())
         if dpg.does_item_exist(TAG_PROGRAM_BAR_GROUP):
             dpg.configure_item(TAG_PROGRAM_BAR_GROUP, show=True)
         dpg.configure_item(TAG_PROG_MODAL, show=False)

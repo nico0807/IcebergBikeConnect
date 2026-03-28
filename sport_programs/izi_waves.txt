@@ -1,0 +1,27 @@
+//Define number of segments : SEG:[NUMBER]
+SEGMENTS:12
+
+// SEG 1-2: Warm up
+SEG:1:1
+SEG:2:2
+
+// SEG 3-4: First Wave (Moderate)
+SEG:3:3
+SEG:4:2  // Micro-rest
+
+// SEG 5-6: Second Wave (Building)
+SEG:5:4
+SEG:6:2  // Micro-rest
+
+// SEG 7-8: Peak Wave (The Challenge)
+SEG:7:5
+SEG:8:3  // Micro-rest
+
+// SEG 9-10: Final Push
+SEG:9:6  // Peak intensity (only 1 segment!)
+SEG:10:3 // Micro-rest
+
+// SEG 11-12: Cool down
+SEG:11:2
+SEG:12:1
+END
