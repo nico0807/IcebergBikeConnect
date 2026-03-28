@@ -210,6 +210,8 @@ App sends: <CR_10> (set to level 10)
 
 Level must be 2 digits, zero-padded (00-99).
 
+> **Firmware bug — avoid `CR_00`:** The bike does not acknowledge `CR_00` commands and, when operating at level 1, reports approximately 10× the correct power value with proportionally incorrect calorie accumulation. `CR_01` is the safe minimum. The client skips `CR_00` entirely.
+
 ### 4. Pause Sport
 
 ```

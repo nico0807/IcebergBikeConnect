@@ -150,4 +150,5 @@ Debug information is automatically logged to timestamped files:
 - **Protocol Timeout**: The bike expects responses within 200ms. No response after 30 messages = connection lost.
 - **Authentication**: Password is hardcoded as `"SUPERWIGH"`.
 - **Level Zero-Indexing**: `CR_00` corresponds to Level 1, so the code subtracts 1 when setting levels.
+- **CR_00 Firmware Bug**: `CR_00` (Level 1) is broken on the bike — the bike ignores the command (no ACK) and reports ~10x the correct power when at level 1, corrupting calories too. `set_level()` skips `CR_00` entirely and uses `CR_01` as the minimum, so UI levels 1 and 2 both map to `CR_01` on the wire.
 - **Screen Wake Lock**: The dashboard automatically prevents your screen from turning off during workouts. This is enabled by default but can be disabled with `--no-wake-lock`. Original system sleep settings are automatically restored when the dashboard exits.
