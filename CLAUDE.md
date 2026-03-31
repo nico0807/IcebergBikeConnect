@@ -9,7 +9,9 @@ This is a Python-based dashboard and client for iSuper gym bikes. The project im
 **Key Components:**
 - [isuper_bike.py](isuper_bike.py) - Core protocol client handling bike connection and data parsing
 - [dashboard.py](dashboard.py) - Terminal-based curses UI for real-time monitoring
+- [dashboard_gui.py](dashboard_gui.py) - Dear PyGui graphical UI for real-time monitoring
 - [sport_program_parser.py](sport_program_parser.py) - Parser for structured workout programs
+- [wake_keeper.py](wake_keeper.py) - OS-level screen wake lock shared by both dashboards (prevents display sleep during workouts)
 
 ## Running the Project
 

@@ -7,8 +7,6 @@ Window-based UI for displaying real-time sport data.
 import queue
 import threading
 import time
-import platform
-import subprocess
 from collections import deque
 from datetime import datetime
 
@@ -16,6 +14,7 @@ import dearpygui.dearpygui as dpg
 
 from isuper_bike import ISuperBike
 from sport_program_parser import SportProgramParser, SportProgram
+from wake_keeper import ScreenWakeKeeper
 
 # ---------------------------------------------------------------------------
 # DPG item tag constants
@@ -95,75 +94,6 @@ METRIC_LABELS = {
 METRICS = list(METRIC_LABELS.keys())
 
 # ---------------------------------------------------------------------------
-# ScreenWakeKeeper  (unchanged from dashboard.py)
-# ---------------------------------------------------------------------------
-
-
-class ScreenWakeKeeper:
-    def __init__(self):
-        self.system = platform.system()
-        self.wake_process = None
-        self.wake_thread = None
-        self.wake_stop_event = None
-
-    def enable_wake_lock(self):
-        try:
-            if self.system == "Windows":
-                import ctypes
-                from threading import Thread, Event
-                ES_CONTINUOUS = 0x80000000
-                ES_DISPLAY_REQUIRED = 0x00000002
-                ES_SYSTEM_REQUIRED = 0x00000001
-                self.wake_stop_event = Event()
-
-                def keep_awake():
-                    while not self.wake_stop_event.is_set():
-                        ctypes.windll.kernel32.SetThreadExecutionState(
-                            ES_CONTINUOUS | ES_DISPLAY_REQUIRED | ES_SYSTEM_REQUIRED)
-                        self.wake_stop_event.wait(5)
-
-                self.wake_thread = Thread(target=keep_awake, daemon=True)
-                self.wake_thread.start()
-            elif self.system == "Darwin":
-                self.wake_process = subprocess.Popen(
-                    ['caffeinate', '-d', '-u'],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            elif self.system == "Linux":
-                try:
-                    subprocess.run(['xset', 's', 'off'],
-                                   capture_output=True, check=True)
-                    subprocess.run(['xset', 's', 'noblank'],
-                                   capture_output=True, check=True)
-                except (subprocess.CalledProcessError, FileNotFoundError):
-                    self.wake_process = subprocess.Popen(
-                        ['systemd-inhibit', '--what=sleep',
-                         '--who=iSuper Bike Dashboard',
-                         '--why=Workout in progress',
-                         '--mode=block', 'sleep', 'infinity'],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except Exception:
-            pass
-
-    def disable_wake_lock(self):
-        try:
-            if self.system == "Windows" and self.wake_stop_event:
-                self.wake_stop_event.set()
-                if self.wake_thread:
-                    self.wake_thread.join(timeout=2)
-            elif self.wake_process:
-                self.wake_process.terminate()
-                self.wake_process.wait()
-                self.wake_process = None
-            if self.system == "Linux":
-                try:
-                    subprocess.run(['xset', 's', 'on'], capture_output=True)
-                except FileNotFoundError:
-                    pass
-        except Exception:
-            pass
-
-
-# ---------------------------------------------------------------------------
 # BikeWorker
 # ---------------------------------------------------------------------------
 class BikeWorker:
@@ -179,14 +109,19 @@ class BikeWorker:
         self._thread: threading.Thread | None = None
         self._busy = False  # True while connect/init/reconnect is running
         self.workout_start: datetime | None = None
-        self.last_log_time = 0.0
-        self.paused = False
+        self.last_log_time: float = 0.0
+        self.paused: bool = False
         self.active_program: SportProgram | None = None
-        # Waiting-for-pedal state
+        # --- Waiting-for-pedal state machine ---
+        # When the user selects a program, we enter a waiting state instead of
+        # starting immediately. The program only starts after PEDAL_REQUIRED_SECONDS
+        # of continuous pedalling (RPM > 0). The GUI shows an orange progress bar
+        # during this phase. Fields reset to defaults when the program launches or
+        # is cancelled.
         self._pending_program: SportProgram | None = None
         self._pending_program_name: str = ''
         self.waiting_for_pedal: bool = False
-        self._pedal_since: float = 0.0  # time when continuous pedalling started
+        self._pedal_since: float = 0.0  # monotonic time when continuous pedalling started
 
     # ------------------------------------------------------------------
     # Public interface (called from GUI thread — thread-safe)
@@ -310,6 +245,14 @@ class BikeWorker:
     PEDAL_REQUIRED_SECONDS = 3  # seconds of continuous pedalling to start program
 
     def _poll_loop(self):
+        """Main background polling loop. Runs at POLL_INTERVAL (0.1 s) until stopped.
+
+        Each iteration handles four concerns in order:
+          1. CSV logging (1 s cadence)
+          2. Waiting-for-pedal countdown — starts queued program after 3 s of RPM > 0
+          3. Active program level updates (1 s cadence)
+          4. Status snapshot posted to the GUI queue for tile/graph refresh
+        """
         last_level_check = 0.0
         while not self._stop_event.is_set():
             if not self.bike.connected:
@@ -321,12 +264,14 @@ class BikeWorker:
 
             now = time.time()
 
-            # Log every second
+            # --- 1. CSV logging (1-second cadence) ---
             if self.workout_start and now - self.last_log_time >= 1.0:
                 self.bike.log_data()
                 self.last_log_time = now
 
-            # Waiting-for-pedal: check RPM and count continuous pedalling time
+            # --- 2. Waiting-for-pedal countdown ---
+            # Tracks continuous RPM > 0; starts the program once PEDAL_REQUIRED_SECONDS
+            # have elapsed. Resets the timer whenever pedalling stops.
             if self.waiting_for_pedal and self._pending_program is not None:
                 rpm = self.bike.rpm
                 if rpm and rpm > 0:
@@ -356,7 +301,7 @@ class BikeWorker:
                     self._post({'type': 'pedal_wait', 'progress': 0.0,
                                 'remaining': float(self.PEDAL_REQUIRED_SECONDS)})
 
-            # Program level updates
+            # --- 3. Active program: apply level changes (1-second cadence) ---
             if self.active_program and not self.paused:
                 if now - last_level_check >= 1.0:
                     last_level_check = now
@@ -368,7 +313,7 @@ class BikeWorker:
                                 self.bike.resistance_min,
                                 self.bike.resistance_max)
 
-            # Post status snapshot
+            # --- 4. Post status snapshot to GUI queue ---
             status = self.bike.get_status()
             elapsed = (datetime.now() - self.workout_start).total_seconds() \
                 if self.workout_start else 0.0
@@ -488,39 +433,18 @@ def _tile_color(value: float, thresholds) -> tuple:
     return color
 
 
-def _build_tile(parent, key: str, label: str, unit: str):
-    """Build a single metric tile child_window. Returns (value_tag, unit_tag)."""
-    value_tag = f"tile_{key}_val"
-    with dpg.child_window(parent=parent, border=True,
-                          height=80, tag=f"tile_{key}_win"):
-        dpg.add_text(label, color=COL_GREY)
-        dpg.add_text("---", tag=value_tag, color=COL_GREEN)
-        if unit:
-            dpg.add_text(unit, color=COL_GREY)
-    return value_tag
-
-
-def _update_tile(key: str, value: float, thresholds):
-    tag = f"tile_{key}_val"
-    if not dpg.does_item_exist(tag):
-        return
-    if key in ('rpm', 'heart_rate', 'level', 'watts'):
-        text = f"{int(value)}"
-    elif key == 'distance':
-        text = f"{value:.3f}"
-    elif key == 'calories':
-        text = f"{value:.1f}"
-    else:
-        text = f"{value:.1f}"
-    color = _tile_color(value, thresholds)
-    dpg.set_value(tag, text)
-    dpg.configure_item(tag, color=color)
-
-
 # ---------------------------------------------------------------------------
 # GUIDashboard
 # ---------------------------------------------------------------------------
 class GUIDashboard:
+    """Main Dear PyGui application window for the iSuper Bike dashboard.
+
+    Owns the DPG context, a BikeWorker background thread, and two GraphPanels.
+    Handles responsive layout switching between wide (>=WIDE_BREAKPOINT px) and
+    narrow layouts. All bike communication is asynchronous — BikeWorker posts
+    messages to a queue that is drained each render frame in _on_frame.
+    """
+
     WIDE_BREAKPOINT = 900
     DEBOUNCE_FRAMES = 3
 
@@ -538,13 +462,15 @@ class GUIDashboard:
         self.program_parser = SportProgramParser()
         self.program_parser.load_programs()
 
-        self.layout_mode = 'wide'
-        self._debounce_mode: str | None = None
-        self._debounce_count = 0
+        self.layout_mode: str = 'wide'  # 'wide' or 'narrow'
+        self._debounce_mode: str | None = None  # candidate mode being debounced
+        self._debounce_count: int = 0           # consecutive frames in candidate mode
 
         self._last_status: dict | None = None
-        self._connected = False
-        self._progress_value = 0.0
+        self._connected: bool = False
+        self._progress_value: float = 0.0  # animated fill for the connection progress bar
+        # GUI-side cache of the worker's waiting-for-pedal progress, updated via
+        # 'pedal_wait' queue messages (avoids reading worker state from GUI thread).
         self._pedal_wait_progress: float = 0.0
         self._pedal_wait_remaining: float = float(BikeWorker.PEDAL_REQUIRED_SECONDS)
 
@@ -772,59 +698,47 @@ class GUIDashboard:
             if self.font_program:
                 dpg.bind_item_font(TAG_PROGRAM_TEXT, self.font_program)
 
+    def _make_button(self, tag: str, label: str, width: int,
+                     height: int, callback, parent=None) -> None:
+        """Add a single control button and bind the medium font if available."""
+        kwargs = dict(tag=tag, label=label, width=width, height=height,
+                      callback=callback)
+        if parent is not None:
+            kwargs['parent'] = parent
+        dpg.add_button(**kwargs)
+        if self.font_medium:
+            dpg.bind_item_font(tag, self.font_medium)
+
     def _build_controls(self, wrap: bool = False):
+        """Build the row(s) of control buttons.
+
+        wrap=False (wide layout): all 6 controls in one horizontal row, Quit below.
+        wrap=True  (narrow layout): controls split into two rows of 3, Quit below.
+        """
         btn_w = 120
         bh = 40
         if not wrap:
             with dpg.group(horizontal=True, parent=TAG_CONTENT_GROUP):
-                self._add_control_buttons(btn_w)
-            dpg.add_button(tag=TAG_BTN_QUIT, label="Quit", width=80, height=bh,
-                           callback=self._on_quit, parent=TAG_CONTENT_GROUP)
-            if self.font_medium:
-                dpg.bind_item_font(TAG_BTN_QUIT, self.font_medium)
+                self._make_button(TAG_BTN_LEVEL_UP,   "+ Level",   btn_w, bh, self._on_level_up)
+                self._make_button(TAG_BTN_LEVEL_DOWN, "- Level",   btn_w, bh, self._on_level_down)
+                self._make_button(TAG_BTN_PAUSE,      "Pause",     btn_w, bh, self._on_pause)
+                self._make_button(TAG_BTN_RESUME,     "Resume",    btn_w, bh, self._on_resume)
+                self._make_button(TAG_BTN_RECONNECT,  "Reconnect", btn_w, bh, self._on_reconnect)
+                self._make_button(TAG_BTN_PROGRAM,    "Program",   btn_w, bh, self._on_open_program)
+            self._make_button(TAG_BTN_QUIT, "Quit", 80, bh, self._on_quit,
+                              parent=TAG_CONTENT_GROUP)
         else:
-            # Two rows of 3
+            # Two rows of 3 for narrow layout
             with dpg.group(parent=TAG_CONTENT_GROUP):
                 with dpg.group(horizontal=True):
-                    dpg.add_button(tag=TAG_BTN_LEVEL_UP,   label="+ Level",
-                                   width=btn_w, height=bh, callback=self._on_level_up)
-                    dpg.add_button(tag=TAG_BTN_LEVEL_DOWN, label="- Level",
-                                   width=btn_w, height=bh, callback=self._on_level_down)
-                    dpg.add_button(tag=TAG_BTN_PAUSE,  label="Pause",
-                                   width=btn_w, height=bh, callback=self._on_pause)
+                    self._make_button(TAG_BTN_LEVEL_UP,   "+ Level",   btn_w, bh, self._on_level_up)
+                    self._make_button(TAG_BTN_LEVEL_DOWN, "- Level",   btn_w, bh, self._on_level_down)
+                    self._make_button(TAG_BTN_PAUSE,      "Pause",     btn_w, bh, self._on_pause)
                 with dpg.group(horizontal=True):
-                    dpg.add_button(tag=TAG_BTN_RESUME,     label="Resume",
-                                   width=btn_w, height=bh, callback=self._on_resume)
-                    dpg.add_button(tag=TAG_BTN_RECONNECT,  label="Reconnect",
-                                   width=btn_w, height=bh, callback=self._on_reconnect)
-                    dpg.add_button(tag=TAG_BTN_PROGRAM,    label="Program",
-                                   width=btn_w, height=bh, callback=self._on_open_program)
-                dpg.add_button(tag=TAG_BTN_QUIT, label="Quit",
-                               width=btn_w, height=bh, callback=self._on_quit)
-                if self.font_medium:
-                    for tag in (TAG_BTN_LEVEL_UP, TAG_BTN_LEVEL_DOWN, TAG_BTN_PAUSE,
-                                TAG_BTN_RESUME, TAG_BTN_RECONNECT, TAG_BTN_PROGRAM,
-                                TAG_BTN_QUIT):
-                        dpg.bind_item_font(tag, self.font_medium)
-
-    def _add_control_buttons(self, btn_w):
-        bh = 40  # button height
-        dpg.add_button(tag=TAG_BTN_LEVEL_UP,   label="+ Level",
-                       width=btn_w, height=bh, callback=self._on_level_up)
-        dpg.add_button(tag=TAG_BTN_LEVEL_DOWN, label="- Level",
-                       width=btn_w, height=bh, callback=self._on_level_down)
-        dpg.add_button(tag=TAG_BTN_PAUSE,      label="Pause",
-                       width=btn_w, height=bh, callback=self._on_pause)
-        dpg.add_button(tag=TAG_BTN_RESUME,     label="Resume",
-                       width=btn_w, height=bh, callback=self._on_resume)
-        dpg.add_button(tag=TAG_BTN_RECONNECT,  label="Reconnect",
-                       width=btn_w, height=bh, callback=self._on_reconnect)
-        dpg.add_button(tag=TAG_BTN_PROGRAM,    label="Program",
-                       width=btn_w, height=bh, callback=self._on_open_program)
-        if self.font_medium:
-            for tag in (TAG_BTN_LEVEL_UP, TAG_BTN_LEVEL_DOWN, TAG_BTN_PAUSE,
-                        TAG_BTN_RESUME, TAG_BTN_RECONNECT, TAG_BTN_PROGRAM):
-                dpg.bind_item_font(tag, self.font_medium)
+                    self._make_button(TAG_BTN_RESUME,     "Resume",    btn_w, bh, self._on_resume)
+                    self._make_button(TAG_BTN_RECONNECT,  "Reconnect", btn_w, bh, self._on_reconnect)
+                    self._make_button(TAG_BTN_PROGRAM,    "Program",   btn_w, bh, self._on_open_program)
+                self._make_button(TAG_BTN_QUIT, "Quit", btn_w, bh, self._on_quit)
 
     def _build_program_modal(self):
         programs = self.program_parser.list_programs()
@@ -909,6 +823,17 @@ class GUIDashboard:
             self._handle_msg(msg)
 
     def _handle_msg(self, msg: dict):
+        """Dispatch a single message from the BikeWorker queue.
+
+        Message types:
+          'progress'        — connection progress text + animated bar fill
+          'connected'       — bike is ready; show tiles, enable buttons
+          'disconnected'    — bike lost; disable buttons
+          'error'           — show error text in progress modal
+          'pedal_wait'      — waiting-for-pedal countdown update (progress, remaining)
+          'program_started' — pedal wait complete; program is now active
+          'status'          — periodic bike data snapshot for tiles, graphs, program bar
+        """
         mtype = msg['type']
 
         if mtype == 'progress':
